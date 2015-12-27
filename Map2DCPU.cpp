@@ -543,29 +543,42 @@ void Map2DCPU::draw()
 bool Map2DCPU::save(const std::string& filename)
 {
     // determin minmax
-//    pi::Point2i minInt(1e6,1e6),maxInt(-1e6,-1e6);
+    SPtr<Map2DCPUPrepare> p;
+    SPtr<Map2DCPUData>    d;
+    {
+        pi::ReadMutex lock(mutex);
+        p=prepared;d=data;
+    }
+    if(d->w()==0||d->h()==0) return false;
 
-//    std::vector<SPtr<Map2DCPUEle> > dataCopy;
-//    int wCopy,hCopy;
-//    {
-//        pi::ReadMutex lock(mutexData);
-//        wCopy=_w;hCopy=_h;
-//        dataCopy=data;
-//    }
-//    for(int x=0;x<wCopy;x++)
-//        for(int y=0;y<hCopy;y++)
-//        {
-//            SPtr<Map2DCPUEle> ele=dataCopy[wCopy*y+x];
-//            if(!ele.get()) continue;
-//            {
-//                pi::ReadMutex lock(ele->mutexData);
-//                if(ele->img.empty()) continue;
-//            }
-//            minInt.x=min(minInt.x,x); minInt.y=min(minInt.y,y);
-//            maxInt.x=max(maxInt.x,x); maxInt.y=max(maxInt.y,y);
-//        }
-//    maxInt=maxInt+pi::Point2i(1,1);
-//    pi::Point2i wh=maxInt-minInt;
-//    cv::Mat result(wh.y*ELE_PIXELS,wh.x*ELE_PIXELS,CV_8UC4);
-    return false;
+    pi::Point2i minInt(1e6,1e6),maxInt(-1e6,-1e6);
+    for(int x=0;x<d->w();x++)
+        for(int y=0;y<d->h();y++)
+        {
+            SPtr<Map2DCPUEle> ele=d->data()[x+y*d->w()];
+            if(!ele.get()) continue;
+            {
+                pi::ReadMutex lock(ele->mutexData);
+                if(ele->img.empty()) continue;
+            }
+            minInt.x=min(minInt.x,x); minInt.y=min(minInt.y,y);
+            maxInt.x=max(maxInt.x,x); maxInt.y=max(maxInt.y,y);
+        }
+
+    maxInt=maxInt+pi::Point2i(1,1);
+    pi::Point2i wh=maxInt-minInt;
+    cv::Mat result(wh.y*ELE_PIXELS,wh.x*ELE_PIXELS,CV_8UC4);
+    for(int x=minInt.x;x<maxInt.x;x++)
+        for(int y=minInt.y;y<maxInt.y;y++)
+        {
+            SPtr<Map2DCPUEle> ele=d->data()[x+y*d->w()];
+            if(!ele.get()) continue;
+            {
+                pi::ReadMutex lock(ele->mutexData);
+                ele->img.copyTo(result(cv::Rect(ELE_PIXELS*(x-minInt.x),ELE_PIXELS*(y-minInt.y),ELE_PIXELS,ELE_PIXELS)));
+            }
+        }
+
+    cv::imwrite(filename,result);
+    return true;
 }

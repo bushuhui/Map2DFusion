@@ -49,6 +49,9 @@ class Map2DGPU:public Map2D,public pi::Thread
         }
         ~Map2DGPUEle();
 
+        bool updateTextureGPU();
+        bool updateTextureCPU();
+
         uchar4* img;//BGRA
         cudaGraphicsResource *cuda_pbo_resource;
 

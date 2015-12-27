@@ -21,6 +21,8 @@ public:
     }
     ~TestSystem()
     {
+        if(map.get())
+            map->save(svar.GetString("Map.File2Save","result.png"));
         map=SPtr<Map2D>();
         win3d=SPtr<pi::gl::Win3D>();
     }
@@ -64,11 +66,9 @@ public:
         string imgfile;
         ifs>>imgfile;
         imgfile=datapath+"/"+imgfile+".png";
-//        cout<<"Reading "<<imgfile<<endl;
         frame.first=cv::imread(imgfile);
         if(frame.first.empty()) return false;
         ifs>>frame.second;
-//        cout<<"Pose:"<<frame.second<<endl;
         return true;
     }
 
@@ -105,7 +105,7 @@ public:
 
         if(!frames.size()) return -4;
 
-        map=Map2D::create(svar.GetInt("Map2D.Type",Map2D::TypeRender));
+        map=Map2D::create(svar.GetInt("Map2D.Type",Map2D::TypeGPU));
         if(!map.get())
         {
             cerr<<"No map2d created!\n";

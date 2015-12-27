@@ -645,30 +645,5 @@ void Map2DRender::draw()
 
 bool Map2DRender::save(const std::string& filename)
 {
-    // determin minmax
-//    pi::Point2i minInt(1e6,1e6),maxInt(-1e6,-1e6);
-
-//    std::vector<SPtr<Map2DRenderEle> > dataCopy;
-//    int wCopy,hCopy;
-//    {
-//        pi::ReadMutex lock(mutexData);
-//        wCopy=_w;hCopy=_h;
-//        dataCopy=data;
-//    }
-//    for(int x=0;x<wCopy;x++)
-//        for(int y=0;y<hCopy;y++)
-//        {
-//            SPtr<Map2DRenderEle> ele=dataCopy[wCopy*y+x];
-//            if(!ele.get()) continue;
-//            {
-//                pi::ReadMutex lock(ele->mutexData);
-//                if(ele->img.empty()) continue;
-//            }
-//            minInt.x=min(minInt.x,x); minInt.y=min(minInt.y,y);
-//            maxInt.x=max(maxInt.x,x); maxInt.y=max(maxInt.y,y);
-//        }
-//    maxInt=maxInt+pi::Point2i(1,1);
-//    pi::Point2i wh=maxInt-minInt;
-//    cv::Mat result(wh.y*ELE_PIXELS,wh.x*ELE_PIXELS,CV_8UC4);
     return false;
 }

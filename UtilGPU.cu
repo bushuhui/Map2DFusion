@@ -5,120 +5,6 @@
 
 
 template <class T>
-void __global__ addKernel1(T *c, const T *a, const T *b)
-{
-    int i = threadIdx.x;
-    c[i] = a[i] + b[i];
-}
-
-template <class T>
-cudaError_t operate<T>::addWithCuda(T *c, const T *a, const T *b, unsigned int size)
-{
-    T *dev_a = 0;
-    T *dev_b = 0;
-    T *dev_c = 0;
-    cudaError_t cudaStatus;
-
-    // Choose which GPU to run on, change this on a multi-GPU system.
-    cudaStatus = cudaSetDevice(0);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaSetDevice failed!  Do you have a CUDA-capable GPU installed?");
-        goto Error;
-    }
-
-    // Allocate GPU buffers for three vectors (two input, one output)    .
-    cudaStatus = cudaMalloc((void**)&dev_c, size * sizeof(T));
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMalloc failed!");
-        goto Error;
-    }
-
-    cudaStatus = cudaMalloc((void**)&dev_a, size * sizeof(T));
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMalloc failed!");
-        goto Error;
-    }
-
-    cudaStatus = cudaMalloc((void**)&dev_b, size * sizeof(T));
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMalloc failed!");
-        goto Error;
-    }
-
-    // Copy input vectors from host memory to GPU buffers.
-    cudaStatus = cudaMemcpy(dev_a, a, size * sizeof(T), cudaMemcpyHostToDevice);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-        goto Error;
-    }
-
-    cudaStatus = cudaMemcpy(dev_b, b, size * sizeof(T), cudaMemcpyHostToDevice);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-        goto Error;
-    }
-
-    // Launch a kernel on the GPU with one thread for each element.
-    addKernel1<T><<<1, size>>>(dev_c, dev_a, dev_b);
-
-    // Check for any errors launching the kernel
-    cudaStatus = cudaGetLastError();
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "addKernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
-        goto Error;
-    }
-
-    // cudaDeviceSynchronize waits for the kernel to finish, and returns
-    // any errors encountered during the launch.
-    cudaStatus = cudaDeviceSynchronize();
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
-        goto Error;
-    }
-
-    // Copy output vector from GPU buffer to host memory.
-    cudaStatus = cudaMemcpy(c, dev_c, size * sizeof(T), cudaMemcpyDeviceToHost);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-        goto Error;
-    }
-
-Error:
-    cudaFree(dev_c);
-    cudaFree(dev_a);
-    cudaFree(dev_b);
-
-    return cudaStatus;
-}
-
-extern "C" void runtest()
-{
-    const int arraySize = 5;
-    const double a_d[arraySize] = { 1.1, 2.2, 3.3, 4.4, 5.5 };
-    const double b_d[arraySize] = { 10.1, 20.1, 30.1, 40.1, 50.1 };
-    double c_d[arraySize] = { 0 };
-
-    // Add vectors in parallel.
-    operate<double> op;
-    cudaError_t cudaStatus = op.addWithCuda(c_d, a_d, b_d, arraySize);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "addWithCuda failed!");
-        return;
-    }
-
-    printf("{1.1,2.2,3.3,4.4,5.5} + {10.1,20.1,30.1,40.1,50.1} = {%f,%f,%f,%f,%f}\n",
-        c_d[0], c_d[1], c_d[2], c_d[3], c_d[4]);
-
-    // cudaDeviceReset must be called before exiting in order for profiling and
-    // tracing tools such as Nsight and Visual Profiler to show complete traces.
-    cudaStatus = cudaDeviceReset();
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaDeviceReset failed!");
-        return;
-    }
-}
-
-template <class T>
 __global__ void warpPerspectiveKernel(int in_rows,int in_cols,T* in_data,
                                       int out_rows,int out_cols,T* out_data,
                                       float* inv,T defVar)
@@ -281,19 +167,32 @@ __global__ void renderFramesKernel(int in_rows,int in_cols,uchar3* in_data,//ima
             float*  inv=invs+9*i;
 
             int idxOut=x+y*out_cols;
+            uchar4* ptrOut=out_data+idxOut;
 
             // find source location
             float srcX=inv[0]*x+inv[1]*y+inv[2];
             float srcY=inv[3]*x+inv[4]*y+inv[5];
             float srcW=inv[6]*x+inv[7]*y+inv[8];
             srcW=1./srcW;srcX*=srcW;srcY*=srcW;
-
-            if(fresh) //warp
+            if(srcX<in_cols&&srcX>=0&&srcY<in_rows&&srcY>=0)
             {
-                if(srcX<in_cols&&srcX>=0&&srcY<in_rows&&srcY>=0)
+                // compute weight
                 {
-                    uchar4* ptrOut=out_data+idxOut;
+                    //image weight
+                    float difX=srcX-in_rows*0.5;
+                    float difY=srcY-in_cols*0.5;
+                    srcW=1000*(difX*difX+difY*difY)/(in_rows*in_rows+in_cols*in_cols);
+                    //center weight
+                    if(srcW<1) srcW=1;
+                }
+                if(fresh)
+                {
                     *((uchar3*)ptrOut)=in_data[(int)srcX+((int)srcY)*in_cols];
+
+                    ptrOut->w=srcW;
+                }
+                else// blender
+                {
                     // compute weight
                     {
                         //image weight
@@ -301,35 +200,20 @@ __global__ void renderFramesKernel(int in_rows,int in_cols,uchar3* in_data,//ima
                         float difY=srcY-in_cols*0.5;
                         srcW=1000*(difX*difX+difY*difY)/(in_rows*in_rows+in_cols*in_cols);
                         if(srcW<1) srcW=1;
+                        srcW=1;
                         //center weight
                     }
-                    ptrOut->w=srcW;
+                    if(ptrOut->w<srcW)
+                    {
+                        ptrOut->w=srcW;
+                        uchar3* ptrIn =in_data +(int)srcX+((int)srcY)*in_cols;
+                        *((uchar3*)ptrOut)=*ptrIn;
+                    }
                 }
-                else
-                {
-                    out_data[idxOut]=defVar;
-                }
-
             }
-            else if(srcX<in_cols&&srcX>=0&&srcY<in_rows&&srcY>=0)// blender
+            else if(fresh)
             {
-                uchar4* ptrOut=out_data+idxOut;
-                // compute weight
-                {
-                    //image weight
-                    float difX=srcX-in_rows*0.5;
-                    float difY=srcY-in_cols*0.5;
-                    srcW=1000*(difX*difX+difY*difY)/(in_rows*in_rows+in_cols*in_cols);
-                    if(srcW<1) srcW=1;
-                    srcW=1;
-                    //center weight
-                }
-                if(ptrOut->w<srcW)
-                {
-                    ptrOut->w=srcW;
-                    uchar3* ptrIn =in_data +(int)srcX+((int)srcY)*in_cols;
-                    *((uchar3*)ptrOut)=*ptrIn;
-                }
+                *ptrOut=defVar;
             }
         }
     }
@@ -339,8 +223,8 @@ bool renderFrameCaller(CudaImage<uchar3>& rgbIn,CudaImage<uchar4>& ele,
                        float* inv,int centerX,int centerY)
 {
     float* invGPU;
-    cudaMalloc((void**) &invGPU,9*sizeof(float));
-    cudaMemcpy(invGPU,inv,9*sizeof(float),cudaMemcpyHostToDevice);
+    checkCudaErrors(cudaMalloc((void**) &invGPU,9*sizeof(float)));
+    checkCudaErrors(cudaMemcpy(invGPU,inv,9*sizeof(float),cudaMemcpyHostToDevice));
     dim3 threads(32,32);
     uchar4 defVar;
     defVar.x=defVar.y=defVar.z=defVar.w=0;
@@ -348,7 +232,7 @@ bool renderFrameCaller(CudaImage<uchar3>& rgbIn,CudaImage<uchar4>& ele,
     renderFrameKernel<<<grid,threads>>>(rgbIn.rows,rgbIn.cols,rgbIn.data,
                                         ele.rows,ele.cols,ele.data,
                                         ele.fresh,defVar,invGPU,centerX,centerY);
-    cudaFree(invGPU);
+    checkCudaErrors(cudaFree(invGPU));
     return true;
 }
 
@@ -361,12 +245,12 @@ bool renderFramesCaller(CudaImage<uchar3>& rgbIn,int out_rows,int out_cols,
     uchar4** outDataGPU;
     bool*  freshesGPU;
 
-    cudaMalloc((void**) &invGPU,9*sizeof(float)*eleNum);
-    cudaMalloc((void**) &outDataGPU,sizeof(uchar4*)*eleNum);
-    cudaMalloc((void**) &freshesGPU,sizeof(bool)*eleNum);
-    cudaMemcpy(invGPU,invs,9*sizeof(float)*eleNum,cudaMemcpyHostToDevice);
-    cudaMemcpy(outDataGPU,out_datas,sizeof(uchar4*)*eleNum,cudaMemcpyHostToDevice);
-    cudaMemcpy(freshesGPU,freshs,sizeof(bool)*eleNum,cudaMemcpyHostToDevice);
+    checkCudaErrors(cudaMalloc((void**) &invGPU,9*sizeof(float)*eleNum));
+    checkCudaErrors(cudaMalloc((void**) &outDataGPU,sizeof(uchar4*)*eleNum));
+    checkCudaErrors(cudaMalloc((void**) &freshesGPU,sizeof(bool)*eleNum));
+    checkCudaErrors(cudaMemcpy(invGPU,invs,9*sizeof(float)*eleNum,cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(outDataGPU,out_datas,sizeof(uchar4*)*eleNum,cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(freshesGPU,freshs,sizeof(bool)*eleNum,cudaMemcpyHostToDevice));
     dim3 threads(32,32);
     uchar4 defVar;
     defVar.x=defVar.y=defVar.z=defVar.w=0;
@@ -374,9 +258,9 @@ bool renderFramesCaller(CudaImage<uchar3>& rgbIn,int out_rows,int out_cols,
     renderFramesKernel<<<grid,threads>>>(rgbIn.rows,rgbIn.cols,rgbIn.data,
                                         out_rows,out_cols,outDataGPU,freshesGPU,
                                         defVar,invGPU,centerX,centerY,eleNum);
-    cudaFree(invGPU);
-    cudaFree(outDataGPU);
-    cudaFree(freshesGPU);
+    checkCudaErrors(cudaFree(invGPU));
+    checkCudaErrors(cudaFree(outDataGPU));
+    checkCudaErrors(cudaFree(freshesGPU));
     return true;
 }
 

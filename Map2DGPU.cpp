@@ -27,9 +27,92 @@ using namespace std;
 Map2DGPU::Map2DGPUEle::~Map2DGPUEle()
 {
     if(texName) pi::gl::Signal_Handle::instance().delete_texture(texName);
-    cudaGraphicsUnregisterResource(cuda_pbo_resource);
+    checkCudaErrors(cudaGraphicsUnregisterResource(cuda_pbo_resource));
     glDeleteBuffersARB(1, &pbo);
-    if(img) cudaFree(img);
+    if(img)
+    {
+        pi::WriteMutex lock(mutexData);
+        checkCudaErrors(cudaFree(img));
+    }
+}
+
+// this is a bad idea, just for test
+bool Map2DGPU::Map2DGPUEle::updateTextureCPU()
+{
+    size_t num_bytes=ELE_PIXELS*ELE_PIXELS*sizeof(uchar4);
+    cv::Mat tmp(ELE_PIXELS,ELE_PIXELS,CV_8UC4);
+    checkCudaErrors(cudaMemcpy(tmp.data,img,num_bytes,cudaMemcpyDeviceToHost));
+
+    if(texName==0)// create texture
+    {
+        glGenTextures(1, &texName);
+        glBindTexture(GL_TEXTURE_2D,texName);
+        glTexImage2D(GL_TEXTURE_2D, 0,
+                     GL_RGBA,tmp.cols,tmp.rows, 0,
+                     GL_BGRA, GL_UNSIGNED_BYTE,tmp.data);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+    }
+    else
+    {
+        glBindTexture(GL_TEXTURE_2D,texName);
+        glTexImage2D(GL_TEXTURE_2D, 0,
+                     GL_RGBA,tmp.cols,tmp.rows, 0,
+                     GL_BGRA, GL_UNSIGNED_BYTE,tmp.data);
+    }
+    Ischanged=false;
+}
+
+bool Map2DGPU::Map2DGPUEle::updateTextureGPU()
+{
+    size_t num_bytes=ELE_PIXELS*ELE_PIXELS*sizeof(uchar4);
+    if(pbo==0)// bind pbo with cuda_pbo_resource
+    {
+        glGenBuffersARB(1, &pbo);
+        glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, pbo);
+        glBufferDataARB(GL_PIXEL_UNPACK_BUFFER_ARB, num_bytes, 0, GL_DYNAMIC_COPY);
+        glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, 0);
+
+        // register this buffer object with CUDA
+        checkCudaErrors(cudaGraphicsGLRegisterBuffer(&cuda_pbo_resource, pbo, cudaGraphicsMapFlagsWriteDiscard));
+
+//        glGenBuffers(1, &pbo);
+//        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
+//        glBufferData(GL_PIXEL_UNPACK_BUFFER, num_bytes, NULL, GL_DYNAMIC_COPY);
+//        cudaGraphicsGLRegisterBuffer(&cuda_pbo_resource, pbo, cudaGraphicsMapFlagsWriteDiscard);
+    }
+    //flush data from ele->img to ele->cuda_pbo_resource
+    if(1)
+    {
+        checkCudaErrors(cudaGraphicsMapResources(1, &cuda_pbo_resource, 0));
+        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **)&img, &num_bytes, cuda_pbo_resource));
+        //printf("CUDA mapped PBO: May access %ld bytes\n", num_bytes);
+        checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0));
+    }
+
+    if(texName==0)// create texture
+    {
+        glGenTextures(1, &texName);
+        glBindTexture(GL_TEXTURE_2D,texName);
+        glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, pbo);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ELE_PIXELS, ELE_PIXELS,
+                     0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+    }
+    else//flush buffer to texture
+    {
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB,pbo);
+        glBindTexture(GL_TEXTURE_2D,texName);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ELE_PIXELS, ELE_PIXELS,
+                     0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+//        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ELE_PIXELS, ELE_PIXELS,/*window_width, window_height,*/
+//                        GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+    }
+    Ischanged=false;
 }
 
 bool Map2DGPU::Map2DGPUPrepare::prepare(const pi::SE3d& plane,const PinHoleParameters& camera,
@@ -330,13 +413,13 @@ bool Map2DGPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
             if(ele->img)
             {
                 pi::ReadMutex lock(ele->mutexData);
-                cudaMemcpy(tmp.data, ele->img, ELE_PIXELS*ELE_PIXELS*sizeof(uchar4), cudaMemcpyDeviceToHost);
+                checkCudaErrors(cudaMemcpy(tmp.data, ele->img, ELE_PIXELS*ELE_PIXELS*sizeof(uchar4), cudaMemcpyDeviceToHost));
 
             }
             else
             {
                 pi::WriteMutex lock(ele->mutexData);
-                cudaMalloc((void**)&ele->img,sizeof(uchar4)*ELE_PIXELS*ELE_PIXELS);
+                checkCudaErrors(cudaMalloc((void**)&ele->img,sizeof(uchar4)*ELE_PIXELS*ELE_PIXELS));
             }
             if(0)
             {
@@ -358,7 +441,7 @@ bool Map2DGPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
 
             {
                 pi::WriteMutex lock(ele->mutexData);
-                cudaMemcpy(ele->img, tmp.data, ELE_PIXELS*ELE_PIXELS*sizeof(uchar4), cudaMemcpyHostToDevice);
+                checkCudaErrors(cudaMemcpy(ele->img, tmp.data, ELE_PIXELS*ELE_PIXELS*sizeof(uchar4), cudaMemcpyHostToDevice));
                 ele->Ischanged=true;
             }
         }
@@ -374,7 +457,7 @@ bool Map2DGPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
             SPtr<Map2DGPUEle> ele=dataCopy[y*d->w()+x];
             if(!ele.get()) continue;
             pi::ReadMutex lock(ele->mutexData);
-            cudaMemcpy(tmp.data,ele->img,ELE_PIXELS*ELE_PIXELS*sizeof(uchar4),cudaMemcpyDeviceToHost);
+            checkCudaErrors(cudaMemcpy(tmp.data,ele->img,ELE_PIXELS*ELE_PIXELS*sizeof(uchar4),cudaMemcpyDeviceToHost));
             tmp.copyTo(result(cv::Rect(ELE_PIXELS*x,ELE_PIXELS*y,ELE_PIXELS,ELE_PIXELS)));
         }
         cv::resize(result,result,cv::Size(1000,result.rows*1000/result.cols));
@@ -490,8 +573,8 @@ bool Map2DGPU::renderFrameGPU(const std::pair<cv::Mat,pi::SE3d>& frame)
     //warp and render with CUDA
     pi::timer.enter("Map2DGPU::UploadImage");
     CudaImage<uchar3> cudaFrame(frame.first.rows,frame.first.cols);
-    cudaMemcpy(cudaFrame.data,frame.first.data,
-               cudaFrame.cols*cudaFrame.rows*sizeof(uchar3),cudaMemcpyHostToDevice);
+    checkCudaErrors(cudaMemcpy(cudaFrame.data,frame.first.data,
+               cudaFrame.cols*cudaFrame.rows*sizeof(uchar3),cudaMemcpyHostToDevice));
     pi::timer.leave("Map2DGPU::UploadImage");
 
     // apply dst to eles
@@ -531,7 +614,7 @@ bool Map2DGPU::renderFrameGPU(const std::pair<cv::Mat,pi::SE3d>& frame)
                     ele->mutexData.lock();
                     if(!ele->img)
                     {
-                        cudaMalloc((void**)&ele->img,sizeof(uchar4)*ELE_PIXELS*ELE_PIXELS);
+                        checkCudaErrors(cudaMalloc((void**)&ele->img,sizeof(uchar4)*ELE_PIXELS*ELE_PIXELS));
                         fresh=true;
                     }
                     out_datas[idx]=ele->img;
@@ -755,7 +838,7 @@ void Map2DGPU::draw()
     }
 
     //draw textures
-    if(0)
+    if(1)
     {
         glEnable(GL_TEXTURE_2D);
         glEnable(GL_BLEND);
@@ -771,7 +854,6 @@ void Map2DGPU::draw()
         std::vector<SPtr<Map2DGPUEle> > dataCopy=d->data();
         int wCopy=d->w(),hCopy=d->h();
         glColor3ub(255,255,255);
-        size_t num_bytes=ELE_PIXELS*ELE_PIXELS*sizeof(uchar4);
         for(int x=0;x<wCopy;x++)
             for(int y=0;y<hCopy;y++)
             {
@@ -788,61 +870,21 @@ void Map2DGPU::draw()
                     pi::timer.enter("glTexImage2D");
                     pi::ReadMutex lock1(ele->mutexData);
 
-                    if(ele->pbo==0)// bind pbo with cuda_pbo_resource
-                    {
-                        glGenBuffers(1, &ele->pbo);
-                        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, ele->pbo);
-                        glBufferData(GL_PIXEL_UNPACK_BUFFER, num_bytes, NULL, GL_DYNAMIC_COPY);
-                        cudaGraphicsGLRegisterBuffer(&ele->cuda_pbo_resource, ele->pbo, cudaGraphicsMapFlagsWriteDiscard);
-                    }
-
-                    if(ele->texName==0)// create texture
-                    {
-                        glGenTextures(1, &ele->texName);
-                        glBindTexture(GL_TEXTURE_2D,ele->texName);
-
-                        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ELE_PIXELS, ELE_PIXELS,
-                                     0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
-
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-                        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,GL_NEAREST);
-                    }
-
-                    //flush data from ele->img to ele->cuda_pbo_resource
-                    if(0)
-                    {
-                        cudaGraphicsMapResources(1, &ele->cuda_pbo_resource, 0);
-                        cudaGraphicsResourceGetMappedPointer((void **)&ele->img, &num_bytes, ele->cuda_pbo_resource);
-                        cudaGraphicsUnmapResources(1, &ele->cuda_pbo_resource, 0);
-                    }
-
-                    //flush buffer to texture
-                    //                {
-                    //                    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, ele->pbo);
-                    //                    glBindTexture(GL_TEXTURE_2D,ele->texName);
-
-                    //                    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ELE_PIXELS, ELE_PIXELS,/*window_width, window_height,*/
-                    //                                    GL_BGRA, GL_UNSIGNED_BYTE, NULL);
-                    //                }
-                    ele->Ischanged=false;
+                    ele->updateTextureGPU();
                     pi::timer.leave("glTexImage2D");
                 }
 
                 // draw things
-                //flush buffer to texture
+                if(ele->texName)
                 {
-                    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, ele->pbo);
                     glBindTexture(GL_TEXTURE_2D,ele->texName);
-
-                    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ELE_PIXELS, ELE_PIXELS,/*window_width, window_height,*/
-                                    GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+                    glBegin(GL_QUADS);
+                    glTexCoord2f(0.0f, 0.0f); glVertex3f(x0,y0,0);
+                    glTexCoord2f(0.0f, 1.0f); glVertex3f(x0,y1,0);
+                    glTexCoord2f(1.0f, 1.0f); glVertex3f(x1,y1,0);
+                    glTexCoord2f(1.0f, 0.0f); glVertex3f(x1,y0,0);
+                    glEnd();
                 }
-                glBegin(GL_QUADS);
-                glTexCoord2f(0.0f, 0.0f); glVertex3f(x0,y0,0);
-                glTexCoord2f(0.0f, 1.0f); glVertex3f(x0,y1,0);
-                glTexCoord2f(1.0f, 1.0f); glVertex3f(x1,y1,0);
-                glTexCoord2f(1.0f, 0.0f); glVertex3f(x1,y0,0);
-                glEnd();
             }
         glBindTexture(GL_TEXTURE_2D, last_texture_ID);
     }
