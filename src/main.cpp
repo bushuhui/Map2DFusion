@@ -21,6 +21,7 @@ public:
         {
             win3d=SPtr<pi::gl::Win3D>(new pi::gl::Win3D());
         }
+
     }
     ~TestSystem()
     {
@@ -64,7 +65,7 @@ public:
     bool obtainFrame(std::pair<cv::Mat,pi::SE3d>& frame)
     {
         string line;
-        if(!getline(in,line)) return false;
+        if(!getline(*in,line)) return false;
         stringstream ifs(line);
         string imgfile;
         ifs>>imgfile;
@@ -84,19 +85,21 @@ public:
             cerr<<"Map2D.DataPath is not seted!\n";
             return -1;
         }
-        if(!svar.ParseFile(datapath+"/config.cfg"))
-        {
-            cerr<<"Can't open file "<<(datapath+"/trajectory.txt")<<endl;
-            return -2;
-        }
+        if(!svar.ParseFile(datapath+"/config.cfg"));
+//        {
+//            cerr<<"Can't open file "<<(datapath+"/trajectory.txt")<<endl;
+//            return -2;
+//        }
 
-        in.open((datapath+"/trajectory.txt").c_str());
-        if(!in.is_open())
-        {
-            cerr<<"Can't open file "<<(datapath+"/trajectory.txt")<<endl;
-            return -3;
-        }
+        if(!in.get())
+                in=SPtr<ifstream>(new ifstream((datapath+"/trajectory.txt").c_str()));
+//                in->open("/mnt/a409/users/zhaoyong/Dataset/NPU/UAV/exp_20151110/flight1/Result/Map2D/Source/trajectory.txt");
 
+                if(!in->is_open())
+                {
+                    cerr<<"Can't open file "<<(datapath+"/trajectory.txt")<<endl;
+                    exit(0);
+                }
         deque<std::pair<cv::Mat,pi::SE3d> > frames;
         for(int i=0;i<100;i++)
         {
@@ -129,7 +132,7 @@ public:
             win3d->SetEventHandle(this);
             win3d->insert(map);
             win3d->setSceneRadius(1000);
-            win3d->show();
+            win3d->Show();
         }
         else
         {
@@ -147,7 +150,7 @@ public:
     }
     string        datapath;
     SPtr<pi::gl::Win3D> win3d;
-    ifstream      in;
+    SPtr<ifstream>      in;
     SPtr<Map2D>   map;
 };
 

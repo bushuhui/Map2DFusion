@@ -514,17 +514,8 @@ void Map2DCPU::draw()
                     glTexImage2D(GL_TEXTURE_2D, 0,
                                  GL_RGBA, ele->img.cols,ele->img.rows, 0,
                                  GL_BGRA, GL_UNSIGNED_BYTE,ele->img.data);
-                    if(svar.GetInt("ShowTex",0))
-                        cv::imshow("tex",ele->img);
-                //    glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_DECAL);
-                //    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-                //glTexEnvfv(GL_TEXUTRE_ENV,GL_TEXTURE_ENV_COLOR,&ColorRGBA);
-                //                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,  GL_LINEAR);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,GL_NEAREST);
-                /*
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);*/
                 ele->Ischanged=false;
                 pi::timer.leave("glTexImage2D");
             }

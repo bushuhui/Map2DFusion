@@ -66,7 +66,7 @@ INCLUDEPATH += $$OPENCV_TOP/include $$OPENCV_TOP/include/opencv ../3rdparty/incl
 ################################################################################
 # PIL settings
 ################################################################################
-TOPDIR=/data/zhaoyong/Linux/Program/Apps/Map2DFusion
+TOPDIR=/data/zhaoyong/Linux/Program/Apps/Tests/Map2DFusion
 PIL_TOP=$$TOPDIR/PIL
 LIBS_DIR=$$TOPDIR/libs
 INCLUDEPATH += $$PIL_TOP/src $$PIL_TOP/Thirdparty
@@ -79,7 +79,7 @@ LIBS+=-L$$TOPDIR/libs \
 # auto-detect CUDA path
 
 CUDA_ARCH     = sm_35
-CUDA_DIR=/usr/local/cuda-7.5
+CUDA_DIR=/usr/local/cuda
 
 INCLUDEPATH += $$CUDA_DIR/include
 

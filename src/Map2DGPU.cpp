@@ -588,9 +588,12 @@ bool Map2DGPU::renderFrameGPU(const std::pair<cv::Mat,pi::SE3d>& frame)
         int w=xmaxInt-xminInt;
         int h=ymaxInt-yminInt;
         int wh=w*h;
+
         uchar4** out_datas=new uchar4*[wh];
         bool* freshs=new bool[wh];
         float* invs=new float[wh*9];
+        int*  centers=new int[wh*2];
+
         for(int x=xminInt,i=0;x<xmaxInt;x++,i++)
             for(int y=yminInt,j=0;y<ymaxInt;y++,j++)
             {
@@ -603,6 +606,9 @@ bool Map2DGPU::renderFrameGPU(const std::pair<cv::Mat,pi::SE3d>& frame)
                 trans=inv*trans;
                 trans.convertTo(trans,CV_32FC1);
                 memcpy(invs+idx*9,trans.data,sizeof(float)*9);
+
+                centers[idx*2]=cenX-x*ELE_PIXELS;
+                centers[idx*2+1]=cenY-y*ELE_PIXELS;
 
                 SPtr<Map2DGPUEle> ele=dataCopy[y*d->w()+x];
                 bool fresh=false;
@@ -624,9 +630,10 @@ bool Map2DGPU::renderFrameGPU(const std::pair<cv::Mat,pi::SE3d>& frame)
             }
 
         pi::timer.enter("RenderKernal");
-        renderFramesCaller(cudaFrame,ELE_PIXELS,ELE_PIXELS,
+        bool success=renderFramesCaller(cudaFrame,ELE_PIXELS,ELE_PIXELS,
                                 out_datas,freshs,
-                                invs,cenX,cenY,wh);
+                                invs,centers,wh);
+
         pi::timer.leave("RenderKernal");
         for(int x=xminInt,i=0;x<xmaxInt;x++,i++)
             for(int y=yminInt,j=0;y<ymaxInt;y++,j++)
@@ -637,11 +644,13 @@ bool Map2DGPU::renderFrameGPU(const std::pair<cv::Mat,pi::SE3d>& frame)
                     ele=d->ele(y*d->w()+x);
                 }
                 ele->mutexData.unlock();
-                ele->Ischanged=true;
+                if(success)
+                    ele->Ischanged=true;
             }
         delete[] out_datas;
         delete[] freshs;
         delete[] invs;
+        delete[] centers;
     }
     else
     {
@@ -870,7 +879,7 @@ void Map2DGPU::draw()
                     pi::timer.enter("glTexImage2D");
                     pi::ReadMutex lock1(ele->mutexData);
 
-                    ele->updateTextureGPU();
+                    ele->updateTextureCPU();
                     pi::timer.leave("glTexImage2D");
                 }
 
