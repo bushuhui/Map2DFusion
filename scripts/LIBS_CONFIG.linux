@@ -199,7 +199,7 @@ LEVMAR_LDFLAGS          = -rdynamic -llevmar -llapack -lblas
 ################################################################################
 LIB_PI_TOP             ?= $(TOPDIR)
 LIB_PI_INCP             = $(LIB_PI_TOP)/src
-LIB_PI_LIBP             = $(LIB_PI_TOP)/libs
+LIB_PI_LIBP             = $(TOPDIR)/libs
 
 
 LIB_PI_CFLAGS           = -I$(LIB_PI_INCP) $(TooN_CFLAGS)

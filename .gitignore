@@ -2,7 +2,7 @@ build
 data
 libs
 *.pro.user*
-LedTrack
+Map2DFusion
 PIL/build
 PIL/bin
 PIL/libs
