@@ -1,3 +1,9 @@
 build
 data
-*.usr*
+libs
+*.pro.user*
+LedTrack
+PIL/build
+PIL/bin
+PIL/libs
+.qgl*

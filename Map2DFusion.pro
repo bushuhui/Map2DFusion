@@ -8,28 +8,28 @@ DEPENDPATH += .
 INCLUDEPATH += .
 
 # Input
-SOURCES += main.cpp \
-    Map2D.cpp \
-    Map2DCPU.cpp \
-    BufferObject.cpp \
-    Map2DRender.cpp \
-    Map2DGPU.cpp \
-    UtilGPU.cpp
+SOURCES += src/main.cpp \
+    src/Map2D.cpp \
+    src/Map2DCPU.cpp \
+    src/BufferObject.cpp \
+    src/Map2DRender.cpp \
+    src/Map2DGPU.cpp \
+    src/UtilGPU.cpp
 
 HEADERS += \
-    Map2D.h \
-    Map2DCPU.h \
-    BufferObject.h \
-    Map2DRender.h \
-    Map2DGPU.h \
-    UtilGPU.h \
-    UtilGPU.cuh
+    src/Map2D.h \
+    src/Map2DCPU.h \
+    src/BufferObject.h \
+    src/Map2DRender.h \
+    src/Map2DGPU.h \
+    src/UtilGPU.h \
+    src/UtilGPU.cuh
 
 # List CUDA source files on the filetree in QtCreator
 OTHER_FILES += \
-    UtilGPU.cu
+    src/UtilGPU.cu
 
-CUDA_SOURCES += UtilGPU.cu
+CUDA_SOURCES += src/UtilGPU.cu
 ################################################################################
 # QT settings
 ################################################################################
@@ -60,13 +60,13 @@ LIBS += -L$$OPENCV_TOP/lib \
         -lopencv_photo -lopencv_stitching -lopencv_ts \
         -lopencv_video -lopencv_videostab
 
-INCLUDEPATH += $$OPENCV_TOP/include $$OPENCV_TOP/include/opencv ../3rdparty/include/
+INCLUDEPATH += $$OPENCV_TOP/include $$OPENCV_TOP/include/opencv ../3rdparty/include/ /usr/local/cuda-7.5/targets/x86_64-linux/include
 
 
 ################################################################################
 # PIL settings
 ################################################################################
-TOPDIR=/data/zhaoyong/Linux/Program/Apps/PIS
+TOPDIR=/data/zhaoyong/Linux/Program/Apps/Map2DFusion
 PIL_TOP=$$TOPDIR/PIL
 LIBS_DIR=$$TOPDIR/libs
 INCLUDEPATH += $$PIL_TOP/src $$PIL_TOP/Thirdparty
@@ -79,7 +79,7 @@ LIBS+=-L$$TOPDIR/libs \
 # auto-detect CUDA path
 
 CUDA_ARCH     = sm_35
-CUDA_DIR      = /data/zhaoyong/Linux/Program/Libs/cuda-6.5
+CUDA_DIR=/usr/local/cuda-7.5
 
 INCLUDEPATH += $$CUDA_DIR/include
 

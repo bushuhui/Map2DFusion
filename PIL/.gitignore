@@ -1,0 +1,6 @@
+*~
+*.o
+build
+libs
+bin
+Data

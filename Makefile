@@ -1,12 +1,56 @@
-TOPDIR 	?= .
-MAKE_TYPE =bin
-LIB_PREFIX=
-BUILD_PATH=$(TOPDIR)/build
-BIN_PATH  =$(TOPDIR)
+################################################################################
+#Lib_ZY Top Makefile.
+################################################################################
+export MAKE             = make -j8
+export MAKE_OS          = linux # win32 mac
 
-COMPILEFLAGS= $(ALL_CFLAGS)
-LINKFLAGS   = $(ALL_LDFLAGS)
+export TOPDIR           = $(shell pwd)
 
-EXEEXT      =  
+#Where to put object files *.o
+export BUILD_PATH       = $(TOPDIR)/build
 
-include $(Function_Data_Path)/MakeScripts/make.conf
+#Where to put final applications
+export BIN_PATH         = $(TOPDIR)
+
+#Where to put libraries
+export LIBS_PATH        = $(TOPDIR)/libs
+export LIB_MAKE_TYPE    = shared # static #
+
+export LIB_PI_TOP	= $(TOPDIR)/PIL
+
+.PHONY: all apps libs lua levmar pi_base pi_lua pi_network pi_hardware pi_gui clean_tmp clean
+all :libs apps
+
+libs:lua levmar pi_base pi_lua pi_network pi_hardware pi_gui
+
+apps: libs
+	$(MAKE) -C src
+
+lua:
+	$(MAKE) -C PIL/Thirdparty/lua-5.1.5
+
+levmar:
+	$(MAKE) -C PIL/Thirdparty/levmar-2.6
+
+pi_base:
+	$(MAKE) -C PIL/src/base
+
+pi_lua:pi_base
+	$(MAKE) -C PIL/src/lua
+
+pi_network:pi_base
+	$(MAKE) -C PIL/src/network
+
+pi_hardware:pi_base
+	$(MAKE) -C PIL/src/hardware
+
+pi_gui:pi_base pi_lua
+	$(MAKE) -C PIL/src/gui
+
+clean:clean_tmp
+	rm Map2DFusion -f
+
+clean_tmp:
+	rm -r $(BUILD_PATH)/*
+
+
