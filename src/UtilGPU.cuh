@@ -95,4 +95,8 @@ bool renderFrameCaller(CudaImage<uchar3>& rgbIn,CudaImage<uchar4>& ele,
 bool renderFramesCaller(CudaImage<uchar3>& rgbIn,int out_rows,int out_cols,
                         uchar4** out_datas,bool* freshs,
                        float* invs,int* centers,int eleNum);
+
+bool renderFramesCaller(CudaImage<uchar3>& rgbIn,int out_rows,int out_cols,
+                        float4** out_datas,bool* freshs,
+                        float* invs,int* centers,int eleNum);
 #endif // UTILGPU_CUH

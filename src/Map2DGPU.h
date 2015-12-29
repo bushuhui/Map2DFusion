@@ -52,7 +52,7 @@ class Map2DGPU:public Map2D,public pi::Thread
         bool updateTextureGPU();
         bool updateTextureCPU();
 
-        uchar4* img;//BGRA
+        float4* img;//BGRA
         cudaGraphicsResource *cuda_pbo_resource;
 
         uint    pbo;
@@ -131,7 +131,6 @@ private:
 
     bool getFrame(std::pair<cv::Mat,pi::SE3d>& frame);
     bool renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame);
-    bool renderFrameGPU(const std::pair<cv::Mat,pi::SE3d>& frame);
     bool spreadMap(double xmin,double ymin,double xmax,double ymax);
 
 

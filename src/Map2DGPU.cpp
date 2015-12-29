@@ -39,8 +39,8 @@ Map2DGPU::Map2DGPUEle::~Map2DGPUEle()
 // this is a bad idea, just for test
 bool Map2DGPU::Map2DGPUEle::updateTextureCPU()
 {
-    size_t num_bytes=ELE_PIXELS*ELE_PIXELS*sizeof(uchar4);
-    cv::Mat tmp(ELE_PIXELS,ELE_PIXELS,CV_8UC4);
+    size_t num_bytes=ELE_PIXELS*ELE_PIXELS*sizeof(float4);
+    cv::Mat tmp(ELE_PIXELS,ELE_PIXELS,CV_32FC4);
     checkCudaErrors(cudaMemcpy(tmp.data,img,num_bytes,cudaMemcpyDeviceToHost));
 
     if(texName==0)// create texture
@@ -49,7 +49,7 @@ bool Map2DGPU::Map2DGPUEle::updateTextureCPU()
         glBindTexture(GL_TEXTURE_2D,texName);
         glTexImage2D(GL_TEXTURE_2D, 0,
                      GL_RGBA,tmp.cols,tmp.rows, 0,
-                     GL_BGRA, GL_UNSIGNED_BYTE,tmp.data);
+                     GL_BGRA, GL_FLOAT,tmp.data);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,GL_NEAREST);
     }
@@ -58,14 +58,14 @@ bool Map2DGPU::Map2DGPUEle::updateTextureCPU()
         glBindTexture(GL_TEXTURE_2D,texName);
         glTexImage2D(GL_TEXTURE_2D, 0,
                      GL_RGBA,tmp.cols,tmp.rows, 0,
-                     GL_BGRA, GL_UNSIGNED_BYTE,tmp.data);
+                     GL_BGRA, GL_FLOAT,tmp.data);
     }
     Ischanged=false;
 }
 
 bool Map2DGPU::Map2DGPUEle::updateTextureGPU()
 {
-    size_t num_bytes=ELE_PIXELS*ELE_PIXELS*sizeof(uchar4);
+    size_t num_bytes=ELE_PIXELS*ELE_PIXELS*sizeof(float4);
     if(pbo==0)// bind pbo with cuda_pbo_resource
     {
         glGenBuffersARB(1, &pbo);
@@ -97,7 +97,7 @@ bool Map2DGPU::Map2DGPUEle::updateTextureGPU()
         glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, pbo);
 
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ELE_PIXELS, ELE_PIXELS,
-                     0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+                     0, GL_BGRA, GL_FLOAT, NULL);
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,GL_NEAREST);
@@ -108,9 +108,9 @@ bool Map2DGPU::Map2DGPUEle::updateTextureGPU()
         glBindTexture(GL_TEXTURE_2D,texName);
 
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ELE_PIXELS, ELE_PIXELS,
-                     0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+                     0, GL_BGRA, GL_FLOAT, NULL);
 //        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ELE_PIXELS, ELE_PIXELS,/*window_width, window_height,*/
-//                        GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+//                        GL_BGRA, GL_FLOAT, NULL);
     }
     Ischanged=false;
 }
@@ -240,235 +240,6 @@ bool Map2DGPU::feed(cv::Mat img,const pi::SE3d& pose)
 
 bool Map2DGPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
 {
-    if(1)return renderFrameGPU(frame);
-    SPtr<Map2DGPUPrepare> p;
-    SPtr<Map2DGPUData>    d;
-    {
-        pi::ReadMutex lock(mutex);
-        p=prepared;d=data;
-    }
-    if(frame.first.cols!=p->_camera.w||frame.first.rows!=p->_camera.h||frame.first.type()!=CV_8UC3)
-    {
-        cerr<<"Map2DGPU::renderFrame: frame.first.cols!=p->_camera.w||frame.first.rows!=p->_camera.h||frame.first.type()!=CV_8UC3\n";
-        return false;
-    }
-    // pose->pts
-    std::vector<pi::Point2d>          imgPts;
-    {
-        imgPts.reserve(4);
-        imgPts.push_back(pi::Point2d(0,0));
-        imgPts.push_back(pi::Point2d(p->_camera.w,0));
-        imgPts.push_back(pi::Point2d(0,p->_camera.h));
-        imgPts.push_back(pi::Point2d(p->_camera.w,p->_camera.h));
-    }
-    vector<pi::Point2d> pts;
-    pts.reserve(imgPts.size());
-    pi::Point3d downLook(0,0,-1);
-    if(frame.second.get_translation().z<0) downLook=pi::Point3d(0,0,1);
-    for(int i=0;i<imgPts.size();i++)
-    {
-        pi::Point3d axis=frame.second.get_rotation()*p->UnProject(imgPts[i]);
-        if(axis.dot(downLook)<0.4)
-        {
-            return false;
-        }
-        axis=frame.second.get_translation()
-                -axis*(frame.second.get_translation().z/axis.z);
-        pts.push_back(pi::Point2d(axis.x,axis.y));
-    }
-    // dest location?
-    double xmin=pts[0].x;
-    double xmax=xmin;
-    double ymin=pts[0].y;
-    double ymax=ymin;
-    for(int i=1;i<pts.size();i++)
-    {
-        if(pts[i].x<xmin) xmin=pts[i].x;
-        if(pts[i].y<ymin) ymin=pts[i].y;
-        if(pts[i].x>xmax) xmax=pts[i].x;
-        if(pts[i].y>ymax) ymax=pts[i].y;
-    }
-    if(xmin<d->min().x||xmax>d->max().x||ymin<d->min().y||ymax>d->max().y)
-    {
-        if(p!=prepared)//what if prepare called?
-        {
-            return false;
-        }
-        if(!spreadMap(xmin,ymin,xmax,ymax))
-        {
-            return false;
-        }
-        else
-        {
-            pi::ReadMutex lock(mutex);
-            if(p!=prepared)//what if prepare called?
-            {
-                return false;
-            }
-            d=data;//new data
-        }
-    }
-    int xminInt=floor((xmin-d->min().x)*d->eleSizeInv());
-    int yminInt=floor((ymin-d->min().y)*d->eleSizeInv());
-    int xmaxInt= ceil((xmax-d->min().x)*d->eleSizeInv());
-    int ymaxInt= ceil((ymax-d->min().y)*d->eleSizeInv());
-    if(xminInt<0||yminInt<0||xmaxInt>d->w()||ymaxInt>d->h()||xminInt>=xmaxInt||yminInt>=ymaxInt)
-    {
-//        cerr<<"Map2DGPU::renderFrame:should never happen!\n";
-        return false;
-    }
-    {
-        xmin=d->min().x+d->eleSize()*xminInt;
-        ymin=d->min().y+d->eleSize()*yminInt;
-        xmax=d->min().x+d->eleSize()*xmaxInt;
-        ymax=d->min().y+d->eleSize()*ymaxInt;
-    }
-    // prepare dst image
-    cv::Mat src;
-    if(weightImage.empty()||weightImage.cols!=frame.first.cols||weightImage.rows!=frame.first.rows)
-    {
-        pi::WriteMutex lock(mutex);
-        int w=frame.first.cols;
-        int h=frame.first.rows;
-        weightImage.create(h,w,CV_8UC4);
-        pi::byte *p=(weightImage.data);
-        float x_center=w/2;
-        float y_center=h/2;
-        float dis_max=sqrt(x_center*x_center+y_center*y_center);
-        int weightType=svar.GetInt("Map2D.WeightType",0);
-        for(int i=0;i<h;i++)
-            for(int j=0;j<w;j++)
-            {
-                float dis=(i-y_center)*(i-y_center)+(j-x_center)*(j-x_center);
-                dis=1-sqrt(dis)/dis_max;
-                p[1]=p[2]=p[0]=0;
-                if(0==weightType)
-                    p[3]=dis*254.;
-                else p[3]=dis*dis*254;
-                if(p[3]<2) p[3]=2;
-                p+=4;
-            }
-        src=weightImage.clone();
-    }
-    else
-    {
-        pi::ReadMutex lock(mutex);
-        src=weightImage.clone();
-    }
-    pi::Array_<pi::byte,4> *psrc=(pi::Array_<pi::byte,4>*)src.data;
-    pi::Array_<pi::byte,3> *pimg=(pi::Array_<pi::byte,3>*)frame.first.data;
-//    float weight=(frame.second.get_rotation()*pi::Point3d(0,0,1)).dot(downLook);
-    for(int i=0,iend=weightImage.cols*weightImage.rows;i<iend;i++)
-    {
-        *((pi::Array_<pi::byte,3>*)psrc)=*pimg;
-//        psrc->data[3]*=weight;
-        psrc++;
-        pimg++;
-    }
-
-    if(svar.GetInt("ShowSRC",0))
-    {
-        cv::imshow("src",src);
-    }
-
-    cv::Mat dst((ymaxInt-yminInt)*ELE_PIXELS,(xmaxInt-xminInt)*ELE_PIXELS,src.type());
-
-    std::vector<cv::Point2f>          imgPtsCV;
-    {
-        imgPtsCV.reserve(imgPts.size());
-        for(int i=0;i<imgPts.size();i++)
-            imgPtsCV.push_back(cv::Point2f(imgPts[i].x,imgPts[i].y));
-    }
-    std::vector<cv::Point2f> destPoints;
-    destPoints.reserve(imgPtsCV.size());
-    for(int i=0;i<imgPtsCV.size();i++)
-    {
-        destPoints.push_back(cv::Point2f((pts[i].x-xmin)*d->lengthPixelInv(),
-                             (pts[i].y-ymin)*d->lengthPixelInv()));
-    }
-
-    cv::Mat transmtx = cv::getPerspectiveTransform(imgPtsCV, destPoints);
-    pi::timer.enter("cv::warpPerspective");
-    cv::warpPerspective(src, dst, transmtx, dst.size(),cv::INTER_LINEAR);
-    pi::timer.leave("cv::warpPerspective");
-
-    if(svar.GetInt("ShowDST",0))
-    {
-        cv::imshow("dst",dst);
-    }
-    // apply dst to eles
-    pi::timer.enter("Apply");
-    std::vector<SPtr<Map2DGPUEle> > dataCopy=d->data();
-    for(int x=xminInt;x<xmaxInt;x++)
-        for(int y=yminInt;y<ymaxInt;y++)
-        {
-            SPtr<Map2DGPUEle> ele=dataCopy[y*d->w()+x];
-            if(!ele.get())
-            {
-                ele=d->ele(y*d->w()+x);
-            }
-
-            cv::Mat tmp=cv::Mat::zeros(ELE_PIXELS,ELE_PIXELS,CV_8UC4);
-
-            if(ele->img)
-            {
-                pi::ReadMutex lock(ele->mutexData);
-                checkCudaErrors(cudaMemcpy(tmp.data, ele->img, ELE_PIXELS*ELE_PIXELS*sizeof(uchar4), cudaMemcpyDeviceToHost));
-
-            }
-            else
-            {
-                pi::WriteMutex lock(ele->mutexData);
-                checkCudaErrors(cudaMalloc((void**)&ele->img,sizeof(uchar4)*ELE_PIXELS*ELE_PIXELS));
-            }
-            if(0)
-            {
-                cv::imshow("img",tmp);
-                int& pause=svar.GetInt("Pause");
-                pause=1;
-                while(pause) sleep(10);
-            }
-            pi::Array_<pi::byte,4> *eleP=(pi::Array_<pi::byte,4>*)tmp.data;
-            pi::Array_<pi::byte,4> *dstP=(pi::Array_<pi::byte,4>*)dst.data;
-            dstP+=(x-xminInt)*ELE_PIXELS+(y-yminInt)*ELE_PIXELS*dst.cols;
-            int skip=dst.cols-tmp.cols;
-            for(int eleY=0;eleY<ELE_PIXELS;eleY++,dstP+=skip)
-                for(int eleX=0;eleX<ELE_PIXELS;eleX++,dstP++,eleP++)
-                {
-                    if(eleP->data[3]<dstP->data[3])
-                        *eleP=*dstP;
-                }
-
-            {
-                pi::WriteMutex lock(ele->mutexData);
-                checkCudaErrors(cudaMemcpy(ele->img, tmp.data, ELE_PIXELS*ELE_PIXELS*sizeof(uchar4), cudaMemcpyHostToDevice));
-                ele->Ischanged=true;
-            }
-        }
-    pi::timer.leave("Apply");
-
-    if(!svar.GetInt("Win3D.Enable"))//show result
-    {
-        cv::Mat result(ELE_PIXELS*d->h(),ELE_PIXELS*d->w(),CV_8UC4);
-        cv::Mat tmp(ELE_PIXELS,ELE_PIXELS,CV_8UC4);
-        for(int x=0;x<d->w();x++)
-            for(int y=0;y<d->h();y++)
-        {
-            SPtr<Map2DGPUEle> ele=dataCopy[y*d->w()+x];
-            if(!ele.get()) continue;
-            pi::ReadMutex lock(ele->mutexData);
-            checkCudaErrors(cudaMemcpy(tmp.data,ele->img,ELE_PIXELS*ELE_PIXELS*sizeof(uchar4),cudaMemcpyDeviceToHost));
-            tmp.copyTo(result(cv::Rect(ELE_PIXELS*x,ELE_PIXELS*y,ELE_PIXELS,ELE_PIXELS)));
-        }
-        cv::resize(result,result,cv::Size(1000,result.rows*1000/result.cols));
-        cv::imshow("img",result);
-        cv::waitKey(0);
-    }
-    return true;
-}
-
-bool Map2DGPU::renderFrameGPU(const std::pair<cv::Mat,pi::SE3d>& frame)
-{
     SPtr<Map2DGPUPrepare> p;
     SPtr<Map2DGPUData>    d;
     {
@@ -583,13 +354,12 @@ bool Map2DGPU::renderFrameGPU(const std::pair<cv::Mat,pi::SE3d>& frame)
     pi::Point3d translation=frame.second.get_translation();
     int cenX=(translation.x-d->min().x)*d->lengthPixelInv();
     int cenY=(translation.y-d->min().y)*d->lengthPixelInv();
-    if(svar.GetInt("Map2DGPU.RenderElesTogether",1))
     {
         int w=xmaxInt-xminInt;
         int h=ymaxInt-yminInt;
         int wh=w*h;
 
-        uchar4** out_datas=new uchar4*[wh];
+        float4** out_datas=new float4*[wh];
         bool* freshs=new bool[wh];
         float* invs=new float[wh*9];
         int*  centers=new int[wh*2];
@@ -620,7 +390,7 @@ bool Map2DGPU::renderFrameGPU(const std::pair<cv::Mat,pi::SE3d>& frame)
                     ele->mutexData.lock();
                     if(!ele->img)
                     {
-                        checkCudaErrors(cudaMalloc((void**)&ele->img,sizeof(uchar4)*ELE_PIXELS*ELE_PIXELS));
+                        checkCudaErrors(cudaMalloc((void**)&ele->img,sizeof(float4)*ELE_PIXELS*ELE_PIXELS));
                         fresh=true;
                     }
                     out_datas[idx]=ele->img;
@@ -652,56 +422,21 @@ bool Map2DGPU::renderFrameGPU(const std::pair<cv::Mat,pi::SE3d>& frame)
         delete[] invs;
         delete[] centers;
     }
-    else
-    {
-        for(int x=xminInt;x<xmaxInt;x++)
-            for(int y=yminInt;y<ymaxInt;y++)
-            {
-                int centerX=cenX-x*ELE_PIXELS;
-                int centerY=cenY-y*ELE_PIXELS;
-                cv::Mat trans=cv::Mat::eye(3,3,CV_32FC1);
-                trans.at<float>(2)=(x-xminInt)*ELE_PIXELS;
-                trans.at<float>(5)=(y-yminInt)*ELE_PIXELS;
-                trans=inv*trans;
-                trans.convertTo(trans,CV_32FC1);
-                SPtr<Map2DGPUEle> ele=dataCopy[y*d->w()+x];
-                bool fresh=false;
-                if(!ele.get())
-                {
-                    ele=d->ele(y*d->w()+x);
-                }
-                {
-                    pi::WriteMutex lock(ele->mutexData);
-                    if(!ele->img)
-                    {
-                        cudaMalloc((void**)&ele->img,sizeof(uchar4)*ELE_PIXELS*ELE_PIXELS);
-                        fresh=true;
-                    }
-                    CudaImage<uchar4> cudaEle(ELE_PIXELS,ELE_PIXELS,ele->img);
-                    cudaEle.fresh=fresh;
-                    pi::timer.enter("RenderKernal");
-                    renderFrameCaller(cudaFrame,cudaEle,
-                                      (float*)trans.data,centerX,centerY);
-                    pi::timer.leave("RenderKernal");
-                    ele->Ischanged=true;
-                }
 
-            }
-    }
 
     pi::timer.leave("Map2DGPU::Apply");
 
     if(!svar.GetInt("Win3D.Enable"))//show result
     {
-        cv::Mat result(ELE_PIXELS*d->h(),ELE_PIXELS*d->w(),CV_8UC4);
-        cv::Mat tmp(ELE_PIXELS,ELE_PIXELS,CV_8UC4);
+        cv::Mat result(ELE_PIXELS*d->h(),ELE_PIXELS*d->w(),CV_32FC4);
+        cv::Mat tmp(ELE_PIXELS,ELE_PIXELS,CV_32FC4);
         for(int x=0;x<d->w();x++)
             for(int y=0;y<d->h();y++)
         {
             SPtr<Map2DGPUEle> ele=dataCopy[y*d->w()+x];
             if(!ele.get()) continue;
             pi::ReadMutex lock(ele->mutexData);
-            cudaMemcpy(tmp.data,ele->img,ELE_PIXELS*ELE_PIXELS*sizeof(uchar4),cudaMemcpyDeviceToHost);
+            cudaMemcpy(tmp.data,ele->img,ELE_PIXELS*ELE_PIXELS*sizeof(float4),cudaMemcpyDeviceToHost);
             tmp.copyTo(result(cv::Rect(ELE_PIXELS*x,ELE_PIXELS*y,ELE_PIXELS,ELE_PIXELS)));
         }
         cv::resize(result,result,cv::Size(1000,result.rows*1000/result.cols));
@@ -926,6 +661,6 @@ bool Map2DGPU::save(const std::string& filename)
 //        }
 //    maxInt=maxInt+pi::Point2i(1,1);
 //    pi::Point2i wh=maxInt-minInt;
-//    cv::Mat result(wh.y*ELE_PIXELS,wh.x*ELE_PIXELS,CV_8UC4);
+//    cv::Mat result(wh.y*ELE_PIXELS,wh.x*ELE_PIXELS,CV_32FC4);
     return false;
 }

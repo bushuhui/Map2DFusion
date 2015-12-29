@@ -218,6 +218,64 @@ __global__ void renderFramesKernel(int in_rows,int in_cols,uchar3* in_data,//ima
     }
 }
 
+__global__ void renderFramesKernel(int in_rows,int in_cols,uchar3* in_data,//image in
+                                   int out_rows,int out_cols,float4** out_datas,
+                                   bool* freshs,float4 defVar,//image out
+                                   float* invs,int* centers,int eleNum//relations
+                                  )
+{
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    if(y<out_rows&&x<out_cols)
+    {
+        for(int i=0;i<eleNum;i++)
+        {
+            float4* out_data=out_datas[i];
+            bool    fresh=freshs[i];
+            float*  inv=invs+9*i;
+
+            int idxOut=x+y*out_cols;
+            float4* ptrOut=out_data+idxOut;
+
+            // find source location
+            float srcX=inv[0]*x+inv[1]*y+inv[2];
+            float srcY=inv[3]*x+inv[4]*y+inv[5];
+            float srcW=inv[6]*x+inv[7]*y+inv[8];
+            srcW=1./srcW;srcX*=srcW;srcY*=srcW;
+
+            if(srcX<in_cols&&srcX>=0&&srcY<in_rows&&srcY>=0)
+            {
+                // compute weight
+                {
+                    //image weight
+                    float difX=srcX-in_rows*0.5;
+                    float difY=srcY-in_cols*0.5;
+                    srcW=(0.25-(difX*difX+difY*difY)/(in_rows*in_rows+in_cols*in_cols));//0~0.25
+                    //center weight
+                    if(1)
+                    {
+                        difX=centers[i*2]-x;
+                        difY=centers[i*2+1]-y;
+                        srcW=1e5*srcW/(difX*difX+difY*difY+1000);
+                    }
+                }
+                if(fresh||ptrOut->w<srcW)
+                {
+                    uchar3* ptrIn =in_data +(int)srcX+((int)srcY)*in_cols;
+                    ptrOut->x=ptrIn->x*0.00392f;
+                    ptrOut->y=ptrIn->y*0.00392f;
+                    ptrOut->z=ptrIn->z*0.00392f;
+                    ptrOut->w=srcW;
+                }
+            }
+            else if(fresh)
+            {
+                *ptrOut=defVar;
+            }
+        }
+    }
+}
+
 bool renderFrameCaller(CudaImage<uchar3>& rgbIn,CudaImage<uchar4>& ele,
                        float* inv,int centerX,int centerY)
 {
@@ -267,5 +325,35 @@ bool renderFramesCaller(CudaImage<uchar3>& rgbIn,int out_rows,int out_cols,
     return true;
 }
 
+bool renderFramesCaller(CudaImage<uchar3>& rgbIn,int out_rows,int out_cols,
+                        float4** out_datas,bool* freshs,
+                       float* invs,int* centers,int eleNum)
+{
+    float* invGPU;
+    float4** outDataGPU;
+    bool*  freshesGPU;
+    int*   centersGPU;
+
+    checkCudaErrors(cudaMalloc((void**) &invGPU,9*sizeof(float)*eleNum));
+    checkCudaErrors(cudaMalloc((void**) &outDataGPU,sizeof(float4*)*eleNum));
+    checkCudaErrors(cudaMalloc((void**) &freshesGPU,sizeof(bool)*eleNum));
+    checkCudaErrors(cudaMalloc((void**) &centersGPU,2*sizeof(int)*eleNum));
+    checkCudaErrors(cudaMemcpy(invGPU,invs,9*sizeof(float)*eleNum,cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(outDataGPU,out_datas,sizeof(float4*)*eleNum,cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(freshesGPU,freshs,sizeof(bool)*eleNum,cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(centersGPU,centers,2*sizeof(int)*eleNum,cudaMemcpyHostToDevice));
+    dim3 threads(32,32);
+    float4 defVar;
+    defVar.x=defVar.y=defVar.z=defVar.w=0;
+    dim3 grid(divUp(out_cols, threads.x), divUp(out_rows, threads.y));
+    renderFramesKernel<<<grid,threads>>>(rgbIn.rows,rgbIn.cols,rgbIn.data,
+                                        out_rows,out_cols,outDataGPU,freshesGPU,
+                                        defVar,invGPU,centersGPU,eleNum);
+    checkCudaErrors(cudaFree(invGPU));
+    checkCudaErrors(cudaFree(outDataGPU));
+    checkCudaErrors(cudaFree(freshesGPU));
+    checkCudaErrors(cudaFree(centersGPU));
+    return true;
+}
 
 
