@@ -252,7 +252,7 @@ __global__ void renderFramesKernel(int in_rows,int in_cols,uchar3* in_data,//ima
                     float difY=srcY-in_cols*0.5;
                     srcW=(0.25-(difX*difX+difY*difY)/(in_rows*in_rows+in_cols*in_cols));//0~0.25
                     //center weight
-                    if(1)
+                    if(0)
                     {
                         difX=centers[i*2]-x;
                         difY=centers[i*2+1]-y;

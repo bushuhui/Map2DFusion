@@ -75,18 +75,18 @@ bool Map2DGPU::Map2DGPUEle::updateTextureGPU()
 
         // register this buffer object with CUDA
         checkCudaErrors(cudaGraphicsGLRegisterBuffer(&cuda_pbo_resource, pbo, cudaGraphicsMapFlagsWriteDiscard));
-
-//        glGenBuffers(1, &pbo);
-//        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
-//        glBufferData(GL_PIXEL_UNPACK_BUFFER, num_bytes, NULL, GL_DYNAMIC_COPY);
-//        cudaGraphicsGLRegisterBuffer(&cuda_pbo_resource, pbo, cudaGraphicsMapFlagsWriteDiscard);
     }
     //flush data from ele->img to ele->cuda_pbo_resource
     if(1)
     {
         checkCudaErrors(cudaGraphicsMapResources(1, &cuda_pbo_resource, 0));
-        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **)&img, &num_bytes, cuda_pbo_resource));
-        //printf("CUDA mapped PBO: May access %ld bytes\n", num_bytes);
+        size_t bytesNum;
+        float4* pboData=NULL;
+        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **)&pboData, &bytesNum, cuda_pbo_resource));
+        if(num_bytes==bytesNum)
+        {
+            checkCudaErrors(cudaMemcpy(pboData,img,bytesNum,cudaMemcpyDeviceToDevice));
+        }
         checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0));
     }
 
@@ -106,11 +106,8 @@ bool Map2DGPU::Map2DGPUEle::updateTextureGPU()
     {
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB,pbo);
         glBindTexture(GL_TEXTURE_2D,texName);
-
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ELE_PIXELS, ELE_PIXELS,
-                     0, GL_BGRA, GL_FLOAT, NULL);
-//        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ELE_PIXELS, ELE_PIXELS,/*window_width, window_height,*/
-//                        GL_BGRA, GL_FLOAT, NULL);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ELE_PIXELS, ELE_PIXELS,/*window_width, window_height,*/
+                        GL_BGRA, GL_FLOAT, NULL);
     }
     Ischanged=false;
 }
@@ -614,7 +611,7 @@ void Map2DGPU::draw()
                     pi::timer.enter("glTexImage2D");
                     pi::ReadMutex lock1(ele->mutexData);
 
-                    ele->updateTextureCPU();
+                    ele->updateTextureGPU();
                     pi::timer.leave("glTexImage2D");
                 }
 
