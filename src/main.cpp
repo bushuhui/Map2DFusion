@@ -101,7 +101,7 @@ public:
                     exit(0);
                 }
         deque<std::pair<cv::Mat,pi::SE3d> > frames;
-        for(int i=0;i<100;i++)
+        for(int i=0,iend=svar.GetInt("PrepareFrameNum",1000);i<iend;i++)
         {
             std::pair<cv::Mat,pi::SE3d> frame;
             if(!obtainFrame(frame)) break;

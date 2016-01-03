@@ -8,7 +8,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/stitching/detail/seam_finders.hpp>
 #include <opencv2/stitching/detail/blenders.hpp>
-#include "UtilGPU.h"
+
 #undef HAVE_OPENCV_GPU
 
 using namespace std;
@@ -26,11 +26,11 @@ using namespace std;
 
 Map2DRender::Map2DRenderEle::~Map2DRenderEle()
 {
-//    if(texName) pi::gl::Signal_Handle::instance().delete_texture(texName);
+    //    if(texName) pi::gl::Signal_Handle::instance().delete_texture(texName);
 }
 
 bool Map2DRender::Map2DRenderPrepare::prepare(const pi::SE3d& plane,const PinHoleParameters& camera,
-                                        const std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
+                                              const std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
 {
     if(frames.size()==0||camera.w<=0||camera.h<=0||camera.fx==0||camera.fy==0)
     {
@@ -100,12 +100,12 @@ bool Map2DRender::Map2DRenderData::prepare(SPtr<Map2DRenderPrepare> prepared)
 
 Map2DRender::Map2DRender(bool thread)
     :alpha(svar.GetInt("Map2D.Alpha",0)),
-     _valid(false),_thread(thread)
+      _valid(false),_thread(thread)
 {
 }
 
 bool Map2DRender::prepare(const pi::SE3d& plane,const PinHoleParameters& camera,
-                const std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
+                          const std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
 {
     //insert frames
     SPtr<Map2DRenderPrepare> p(new Map2DRenderPrepare);
@@ -279,7 +279,7 @@ bool Map2DRender::renderFrames(std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
         }
         cornersWorld[idx]=cv::Point2f(curMin.x,curMin.y);
         sizes[idx]=cv::Size((curMax.x-curMin.x)*d->lengthPixelInv(),
-                          (curMax.y-curMin.y)*d->lengthPixelInv());
+                            (curMax.y-curMin.y)*d->lengthPixelInv());
 
         std::vector<cv::Point2f> destPoints;
         destPoints.reserve(imgPtsCV.size());
@@ -289,10 +289,8 @@ bool Map2DRender::renderFrames(std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
                                              (planePts[i].y-curMin.y)*d->lengthPixelInv()));
         }
         cv::Mat transmtx = cv::getPerspectiveTransform(imgPtsCV, destPoints);
-//        cv::warpPerspective(img, imgwarped[idx], transmtx, sizes[idx],cv::INTER_LINEAR);
-//        cv::warpPerspective(weightImage, maskwarped[idx], transmtx, sizes[idx],cv::INTER_LINEAR);
-        UtilGPU::warpPerspective(img,imgwarped[idx],transmtx,sizes[idx]);
-        UtilGPU::warpPerspective(weightImage, maskwarped[idx], transmtx, sizes[idx]);
+        cv::warpPerspective(img, imgwarped[idx], transmtx, sizes[idx],cv::INTER_LINEAR);
+        cv::warpPerspective(weightImage, maskwarped[idx], transmtx, sizes[idx],cv::INTER_LINEAR);
         if(0)
         {
             cv::imshow("imgwarped",imgwarped[idx]);
@@ -326,7 +324,7 @@ bool Map2DRender::renderFrames(std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
 
     if(xminInt<0||yminInt<0||xmaxInt>d->w()||ymaxInt>d->h()||xminInt>=xmaxInt||yminInt>=ymaxInt)
     {
-//        cerr<<"Map2DCPU::renderFrame:should never happen!\n";
+        //        cerr<<"Map2DCPU::renderFrame:should never happen!\n";
         return false;
     }
     {
@@ -364,20 +362,20 @@ bool Map2DRender::renderFrames(std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
             seam_finder = new cv::detail::VoronoiSeamFinder();
         else if (seam_find_type == "gc_color")
         {
-    #ifdef HAVE_OPENCV_GPU
+#ifdef HAVE_OPENCV_GPU
             if (try_gpu && gpu::getCudaEnabledDeviceCount() > 0)
                 seam_finder = new cv::detail::GraphCutSeamFinderGpu(GraphCutSeamFinderBase::COST_COLOR);
             else
-    #endif
+#endif
                 seam_finder = new cv::detail::GraphCutSeamFinder(cv::detail::GraphCutSeamFinderBase::COST_COLOR);
         }
         else if (seam_find_type == "gc_colorgrad")
         {
-    #ifdef HAVE_OPENCV_GPU
+#ifdef HAVE_OPENCV_GPU
             if (try_gpu && gpu::getCudaEnabledDeviceCount() > 0)
                 seam_finder = new cv::detail::GraphCutSeamFinderGpu(GraphCutSeamFinderBase::COST_COLOR_GRAD);
             else
-    #endif
+#endif
                 seam_finder = new cv::detail::GraphCutSeamFinder(GraphCutSeamFinderBase::COST_COLOR_GRAD);
         }
         else if (seam_find_type == "dp_color")
@@ -439,7 +437,7 @@ bool Map2DRender::renderFrames(std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
                 if(blend_type = Blender::FEATHER)
                     imgwarped[i].convertTo(imgwarped[i],CV_16SC3);
                 blender->feed(imgwarped[i], maskwarped[i], cornersImages[i]);
-                if(0)
+                if(1)
                 {
                     cv::imshow("imgwarped",imgwarped[i]);
                     cv::imshow("maskwarped",maskwarped[i]);
@@ -449,11 +447,17 @@ bool Map2DRender::renderFrames(std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
         }
         blender->blend(result, result_mask);
     }
+    // 4.apply to the map
     if(1)
+    {
+
+    }
+    else
     {
         cv::imwrite("result.jpg",result);
         result.convertTo(result,CV_8U);
         cv::resize(result,result,cv::Size(1000,1000./result.cols*result.rows));
+        cv::resize(result_mask,result_mask,cv::Size(1000,1000./result_mask.cols*result_mask.rows));
         cv::imshow("result",result);
         cv::imshow("result_mask",result_mask);
         cv::waitKey(0);
@@ -500,9 +504,9 @@ bool Map2DRender::spreadMap(double xmin,double ymin,double xmax,double ymax)
     {
         pi::WriteMutex lock(mutex);
         data=SPtr<Map2DRenderData>(new Map2DRenderData(d->eleSize(),d->lengthPixel(),
-                                                 pi::Point3d(max.x,max.y,d->max().z),
-                                                 pi::Point3d(min.x,min.y,d->min().z),
-                                                 w,h,dataCopy));
+                                                       pi::Point3d(max.x,max.y,d->max().z),
+                                                       pi::Point3d(min.x,min.y,d->min().z),
+                                                       w,h,dataCopy));
     }
     pi::timer.leave("Map2DRender::spreadMap");
     return true;
@@ -582,7 +586,7 @@ void Map2DRender::draw()
     //draw textures
     glEnable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
-//    glEnable(GL_LIGHTING);
+    //    glEnable(GL_LIGHTING);
     if(alpha)
     {
         glEnable(GL_ALPHA_TEST);
@@ -614,21 +618,13 @@ void Map2DRender::draw()
                 pi::timer.enter("glTexImage2D");
                 pi::ReadMutex lock1(ele->mutexData);
                 glBindTexture(GL_TEXTURE_2D,ele->texName);
-//                if(ele->img.elemSize()==1)
-                    glTexImage2D(GL_TEXTURE_2D, 0,
-                                 GL_RGBA, ele->img.cols,ele->img.rows, 0,
-                                 GL_BGRA, GL_UNSIGNED_BYTE,ele->img.data);
-                    if(svar.GetInt("ShowTex",0))
-                        cv::imshow("tex",ele->img);
-                //    glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_DECAL);
-                //    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-                //glTexEnvfv(GL_TEXUTRE_ENV,GL_TEXTURE_ENV_COLOR,&ColorRGBA);
-                //                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTexImage2D(GL_TEXTURE_2D, 0,
+                             GL_RGBA, ele->img.cols,ele->img.rows, 0,
+                             GL_BGRA, GL_UNSIGNED_BYTE,ele->img.data);
+                if(svar.GetInt("ShowTex",0))
+                    cv::imshow("tex",ele->img);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,  GL_LINEAR);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,GL_NEAREST);
-                /*
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);*/
                 ele->Ischanged=false;
                 pi::timer.leave("glTexImage2D");
             }

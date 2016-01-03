@@ -21,7 +21,7 @@ export LIB_PI_TOP	= $(TOPDIR)/PIL
 .PHONY: all apps libs lua levmar pi_base pi_lua pi_network pi_hardware pi_gui clean_tmp clean
 all :libs apps
 
-libs:lua levmar pi_base pi_lua pi_network pi_hardware pi_gui
+libs:lua  pi_base pi_lua pi_hardware pi_gui
 
 apps: libs
 	$(MAKE) -C src

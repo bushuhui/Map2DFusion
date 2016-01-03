@@ -6,7 +6,6 @@
 #include <gui/gl/SignalHandle.h>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
-#include "UtilGPU.h"
 
 using namespace std;
 
@@ -23,7 +22,7 @@ using namespace std;
 
 Map2DCPU::Map2DCPUEle::~Map2DCPUEle()
 {
-//    if(texName) pi::gl::Signal_Handle::instance().delete_texture(texName);
+    if(texName) pi::gl::Signal_Handle::instance().delete_texture(texName);
 }
 
 bool Map2DCPU::Map2DCPUPrepare::prepare(const pi::SE3d& plane,const PinHoleParameters& camera,
@@ -221,15 +220,8 @@ bool Map2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
     int ymaxInt= ceil((ymax-d->min().y)*d->eleSizeInv());
     if(xminInt<0||yminInt<0||xmaxInt>d->w()||ymaxInt>d->h()||xminInt>=xmaxInt||yminInt>=ymaxInt)
     {
-//        cerr<<"Map2DCPU::renderFrame:should never happen!\n";
+        cerr<<"Map2DCPU::renderFrame:should never happen!\n";
         return false;
-    }
-    if(0)
-    {
-        if(xminInt<0) xminInt=0;
-        if(yminInt<0) yminInt=0;
-        if(xmaxInt>d->w())xmaxInt=d->w();
-        if(ymaxInt>d->h())ymaxInt=d->h();
     }
     {
         xmin=d->min().x+d->eleSize()*xminInt;
@@ -302,12 +294,7 @@ bool Map2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
     }
 
     cv::Mat transmtx = cv::getPerspectiveTransform(imgPtsCV, destPoints);
-    pi::timer.enter("cv::warpPerspective");
-    if(svar.GetInt("Map2DCPU.EnableGPU",1))
-        UtilGPU::warpPerspective(src,dst,transmtx,cv::Size(dst.cols,dst.rows));
-    else
-        cv::warpPerspective(src, dst, transmtx, dst.size(),cv::INTER_LINEAR);
-    pi::timer.leave("cv::warpPerspective");
+    cv::warpPerspective(src, dst, transmtx, dst.size(),cv::INTER_LINEAR);
 
     if(svar.GetInt("ShowDST",0))
     {

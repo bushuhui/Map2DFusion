@@ -13,8 +13,7 @@ SOURCES += src/main.cpp \
     src/Map2DCPU.cpp \
     src/BufferObject.cpp \
     src/Map2DRender.cpp \
-    src/Map2DGPU.cpp \
-    src/UtilGPU.cpp
+    src/Map2DGPU.cpp
 
 HEADERS += \
     src/Map2D.h \
@@ -22,13 +21,12 @@ HEADERS += \
     src/BufferObject.h \
     src/Map2DRender.h \
     src/Map2DGPU.h \
-    src/UtilGPU.h \
     src/UtilGPU.cuh
 
 # List CUDA source files on the filetree in QtCreator
 OTHER_FILES += \
     src/UtilGPU.cu
-
+DEFINES += HAS_CUDA
 CUDA_SOURCES += src/UtilGPU.cu
 ################################################################################
 # QT settings
@@ -66,7 +64,7 @@ INCLUDEPATH += $$OPENCV_TOP/include $$OPENCV_TOP/include/opencv ../3rdparty/incl
 ################################################################################
 # PIL settings
 ################################################################################
-TOPDIR=/data/zhaoyong/Linux/Program/Apps/Map2DFusion
+TOPDIR=/data/zhaoyong/Linux/Program/Apps/Tests/Map2DFusion
 PIL_TOP=$$TOPDIR/PIL
 LIBS_DIR=$$TOPDIR/libs
 INCLUDEPATH += $$PIL_TOP/src $$PIL_TOP/Thirdparty

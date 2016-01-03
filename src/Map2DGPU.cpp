@@ -1,18 +1,21 @@
-#include "Map2DGPU.h"
-#include <gui/gl/glHelper.h>
-#include <GL/glew.h>
-#include <GL/gl.h>
-#include <base/Svar/Svar.h>
-#include <base/time/Global_Timer.h>
-#include <gui/gl/SignalHandle.h>
+#ifdef HAS_CUDA
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
+#include <GL/glew.h>
+#include <GL/gl.h>
 #include <cuda_gl_interop.h>
+
+#include <base/Svar/Svar.h>
+#include <base/time/Global_Timer.h>
+#include <gui/gl/glHelper.h>
+#include <gui/gl/SignalHandle.h>
+
+#include "Map2DGPU.h"
 #include "UtilGPU.cuh"
 
-using namespace std;
 
+using namespace std;
 
 /**
 
@@ -364,8 +367,6 @@ bool Map2DGPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
         for(int x=xminInt,i=0;x<xmaxInt;x++,i++)
             for(int y=yminInt,j=0;y<ymaxInt;y++,j++)
             {
-//                int centerX=cenX-x*ELE_PIXELS;
-//                int centerY=cenY-y*ELE_PIXELS;
                 int idx=(i+j*w);
                 cv::Mat trans=cv::Mat::eye(3,3,CV_32FC1);
                 trans.at<float>(2)=i*ELE_PIXELS;
@@ -635,29 +636,44 @@ void Map2DGPU::draw()
 bool Map2DGPU::save(const std::string& filename)
 {
     // determin minmax
-//    pi::Point2i minInt(1e6,1e6),maxInt(-1e6,-1e6);
+    SPtr<Map2DGPUPrepare> p;
+    SPtr<Map2DGPUData>    d;
+    {
+        pi::ReadMutex lock(mutex);
+        p=prepared;d=data;
+    }
+    if(d->w()==0||d->h()==0) return false;
 
-//    std::vector<SPtr<Map2DGPUEle> > dataCopy;
-//    int wCopy,hCopy;
-//    {
-//        pi::ReadMutex lock(mutexData);
-//        wCopy=_w;hCopy=_h;
-//        dataCopy=data;
-//    }
-//    for(int x=0;x<wCopy;x++)
-//        for(int y=0;y<hCopy;y++)
-//        {
-//            SPtr<Map2DGPUEle> ele=dataCopy[wCopy*y+x];
-//            if(!ele.get()) continue;
-//            {
-//                pi::ReadMutex lock(ele->mutexData);
-//                if(ele->img.empty()) continue;
-//            }
-//            minInt.x=min(minInt.x,x); minInt.y=min(minInt.y,y);
-//            maxInt.x=max(maxInt.x,x); maxInt.y=max(maxInt.y,y);
-//        }
-//    maxInt=maxInt+pi::Point2i(1,1);
-//    pi::Point2i wh=maxInt-minInt;
-//    cv::Mat result(wh.y*ELE_PIXELS,wh.x*ELE_PIXELS,CV_32FC4);
-    return false;
+    pi::Point2i minInt(1e6,1e6),maxInt(-1e6,-1e6);
+    for(int x=0;x<d->w();x++)
+        for(int y=0;y<d->h();y++)
+        {
+            SPtr<Map2DGPUEle> ele=d->data()[x+y*d->w()];
+            if(!ele.get()) continue;
+            {
+                pi::ReadMutex lock(ele->mutexData);
+                if(!ele->img) continue;
+            }
+            minInt.x=min(minInt.x,x); minInt.y=min(minInt.y,y);
+            maxInt.x=max(maxInt.x,x); maxInt.y=max(maxInt.y,y);
+        }
+
+    maxInt=maxInt+pi::Point2i(1,1);
+    pi::Point2i wh=maxInt-minInt;
+    cv::Mat result(wh.y*ELE_PIXELS,wh.x*ELE_PIXELS,CV_32FC4);
+
+    cv::Mat tmp(ELE_PIXELS,ELE_PIXELS,CV_32FC4);
+    for(int x=minInt.x;x<d->w();x++)
+        for(int y=minInt.y;y<d->h();y++)
+    {
+        SPtr<Map2DGPUEle> ele=d->data()[y*d->w()+x];
+        if(!ele.get()) continue;
+        pi::ReadMutex lock(ele->mutexData);
+        cudaMemcpy(tmp.data,ele->img,ELE_PIXELS*ELE_PIXELS*sizeof(float4),cudaMemcpyDeviceToHost);
+        tmp.copyTo(result(cv::Rect(ELE_PIXELS*(x-minInt.x),ELE_PIXELS*(y-minInt.y),ELE_PIXELS,ELE_PIXELS)));
+    }
+    result.convertTo(result,CV_8UC3,255.);
+    cv::imwrite(filename,result);
+    return true;
 }
+#endif

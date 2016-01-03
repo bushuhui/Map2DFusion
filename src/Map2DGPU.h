@@ -2,6 +2,8 @@
 #define MAP2DGPU_H
 #include "Map2D.h"
 #include "Map2DCPU.h"
+#ifdef HAS_CUDA
+
 #include <cuda_runtime.h>
 
 class Map2DGPU:public Map2D,public pi::Thread
@@ -144,4 +146,5 @@ private:
     int&                              alpha;
 };
 
+#endif // HAS_GPU
 #endif // MAP2DGPU_H

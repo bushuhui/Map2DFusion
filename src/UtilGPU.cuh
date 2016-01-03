@@ -1,8 +1,8 @@
 #ifndef UTILGPU_CUH
 #define UTILGPU_CUH
+#if HAS_CUDA
 
 #include <cuda_runtime.h>
-//#include "device_launch_parameters.h"
 #include <stdio.h>
 
 // This will output the proper CUDA error strings in the event that a CUDA host call returns an error
@@ -99,4 +99,6 @@ bool renderFramesCaller(CudaImage<uchar3>& rgbIn,int out_rows,int out_cols,
 bool renderFramesCaller(CudaImage<uchar3>& rgbIn,int out_rows,int out_cols,
                         float4** out_datas,bool* freshs,
                         float* invs,int* centers,int eleNum);
+#endif
+
 #endif // UTILGPU_CUH

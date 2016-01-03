@@ -204,7 +204,7 @@ LIB_PI_LIBP             = $(TOPDIR)/libs
 
 LIB_PI_CFLAGS           = -I$(LIB_PI_INCP) $(TooN_CFLAGS)
 LIB_PI_LDFLAGS          = -Wl,-rpath=. -L$(LIB_PI_LIBP) \
-                          -lpi_lua -lpi_gui -lpi_network -lpi_hardware \
+                          -lpi_lua -lpi_gui -lpi_hardware \
                           -lpi_base
 
 PIL_CFLAGS              = $(LIB_PI_CFLAGS)

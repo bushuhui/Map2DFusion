@@ -1,8 +1,8 @@
+#ifdef HAS_CUDA
+
 #include "UtilGPU.cuh"
-//#include "device_launch_parameters.h"
 #include <stdio.h>
 #include <base/time/Global_Timer.h>
-
 
 template <class T>
 __global__ void warpPerspectiveKernel(int in_rows,int in_cols,T* in_data,
@@ -252,7 +252,7 @@ __global__ void renderFramesKernel(int in_rows,int in_cols,uchar3* in_data,//ima
                     float difY=srcY-in_cols*0.5;
                     srcW=(0.25-(difX*difX+difY*difY)/(in_rows*in_rows+in_cols*in_cols));//0~0.25
                     //center weight
-                    if(0)
+                    if(1)
                     {
                         difX=centers[i*2]-x;
                         difY=centers[i*2+1]-y;
@@ -356,4 +356,4 @@ bool renderFramesCaller(CudaImage<uchar3>& rgbIn,int out_rows,int out_cols,
     return true;
 }
 
-
+#endif
