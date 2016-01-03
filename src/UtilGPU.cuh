@@ -1,6 +1,7 @@
 #ifndef UTILGPU_CUH
 #define UTILGPU_CUH
-#if HAS_CUDA
+
+#ifdef HAS_CUDA
 
 #include <cuda_runtime.h>
 #include <stdio.h>

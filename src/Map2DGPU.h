@@ -45,8 +45,7 @@ class Map2DGPU:public Map2D,public pi::Thread
     struct Map2DGPUEle
     {
         Map2DGPUEle()
-            :img(NULL),cuda_pbo_resource(NULL),
-             pbo(0),texName(0),Ischanged(false)
+            :img(NULL),texName(0),Ischanged(false)
         {
         }
         ~Map2DGPUEle();
@@ -55,9 +54,6 @@ class Map2DGPU:public Map2D,public pi::Thread
         bool updateTextureCPU();
 
         float4* img;//BGRA
-        cudaGraphicsResource *cuda_pbo_resource;
-
-        uint    pbo;
         uint    texName;
 
         bool    Ischanged;

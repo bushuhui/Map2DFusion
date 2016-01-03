@@ -52,9 +52,17 @@ public:
             pause=!pause;
         }
             break;
+        case Qt::Key_Escape:
+        {
+            stop();
+            return false;
+        }
+            break;
         default:
+            return false;
             break;
         }
+        return false;
     }
 
     int testBufferObject()
@@ -85,23 +93,23 @@ public:
             cerr<<"Map2D.DataPath is not seted!\n";
             return -1;
         }
-        if(!svar.ParseFile(datapath+"/config.cfg"));
-//        {
-//            cerr<<"Can't open file "<<(datapath+"/trajectory.txt")<<endl;
+        svar.ParseFile(datapath+"/config.cfg");
+        if(!svar.exist("Plane"));
+        {
+//            cerr<<"Plane is not defined!\n";
 //            return -2;
-//        }
+        }
 
         if(!in.get())
-                in=SPtr<ifstream>(new ifstream((datapath+"/trajectory.txt").c_str()));
-//                in->open("/mnt/a409/users/zhaoyong/Dataset/NPU/UAV/exp_20151110/flight1/Result/Map2D/Source/trajectory.txt");
+            in=SPtr<ifstream>(new ifstream((datapath+"/trajectory.txt").c_str()));
 
-                if(!in->is_open())
-                {
-                    cerr<<"Can't open file "<<(datapath+"/trajectory.txt")<<endl;
-                    exit(0);
-                }
+        if(!in->is_open())
+        {
+            cerr<<"Can't open file "<<(datapath+"/trajectory.txt")<<endl;
+            return -3;
+        }
         deque<std::pair<cv::Mat,pi::SE3d> > frames;
-        for(int i=0,iend=svar.GetInt("PrepareFrameNum",1000);i<iend;i++)
+        for(int i=0,iend=svar.GetInt("PrepareFrameNum",10);i<iend;i++)
         {
             std::pair<cv::Mat,pi::SE3d> frame;
             if(!obtainFrame(frame)) break;
@@ -138,6 +146,21 @@ public:
         {
             int& needStop=svar.GetInt("ShouldStop");
             while(!needStop) sleep(20);
+        }
+
+        if(svar.GetInt("AutoFeedFrames"))
+        {
+            pi::Rate rate(100);
+            while(!shouldStop())
+            {
+                if(map->queueSize()<2)
+                {
+                    std::pair<cv::Mat,pi::SE3d> frame;
+                    if(!obtainFrame(frame)) break;
+                    map->feed(frame.first,frame.second);
+                }
+                rate.sleep();
+            }
         }
     }
 

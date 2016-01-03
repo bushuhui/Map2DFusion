@@ -247,22 +247,27 @@ __global__ void renderFramesKernel(int in_rows,int in_cols,uchar3* in_data,//ima
             {
                 // compute weight
                 {
-                    //image weight
-                    float difX=srcX-in_rows*0.5;
-                    float difY=srcY-in_cols*0.5;
-                    srcW=(0.25-(difX*difX+difY*difY)/(in_rows*in_rows+in_cols*in_cols));//0~0.25
+                    if(0)
+                    {
+                        //image weight //1-sqrt(dis)/dis_max;
+                        float difX=srcX/(float)in_cols-0.5;
+                        float difY=srcY/(float)in_rows-0.5;
+                        srcW=0.5-(difX*difX+difY*difY);//0~0.25
+                    }
+                    else srcW=1;
+
                     //center weight
                     if(1)
                     {
-                        difX=centers[i*2]-x;
-                        difY=centers[i*2+1]-y;
+                        float difX=centers[i*2]-x;
+                        float difY=centers[i*2+1]-y;
                         srcW=1e5*srcW/(difX*difX+difY*difY+1000);
                     }
                 }
-                if(fresh||ptrOut->w<srcW)
+                if(fresh||ptrOut->w<=srcW)
                 {
                     uchar3* ptrIn =in_data +(int)srcX+((int)srcY)*in_cols;
-                    ptrOut->x=ptrIn->x*0.00392f;
+                    ptrOut->x=ptrIn->x*0.00392f;//~=/256
                     ptrOut->y=ptrIn->y*0.00392f;
                     ptrOut->z=ptrIn->z*0.00392f;
                     ptrOut->w=srcW;

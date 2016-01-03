@@ -11,14 +11,12 @@ INCLUDEPATH += .
 SOURCES += src/main.cpp \
     src/Map2D.cpp \
     src/Map2DCPU.cpp \
-    src/BufferObject.cpp \
     src/Map2DRender.cpp \
     src/Map2DGPU.cpp
 
 HEADERS += \
     src/Map2D.h \
     src/Map2DCPU.h \
-    src/BufferObject.h \
     src/Map2DRender.h \
     src/Map2DGPU.h \
     src/UtilGPU.cuh
@@ -26,7 +24,7 @@ HEADERS += \
 # List CUDA source files on the filetree in QtCreator
 OTHER_FILES += \
     src/UtilGPU.cu
-DEFINES += HAS_CUDA
+QMAKE_CXXFLAGS +=  -DHAS_CUDA
 CUDA_SOURCES += src/UtilGPU.cu
 ################################################################################
 # QT settings

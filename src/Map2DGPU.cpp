@@ -17,6 +17,9 @@
 
 using namespace std;
 
+cudaGraphicsResource* cuda_pbo_resource=NULL;
+uint    pbo=0;
+
 /**
 
   __________max
@@ -30,8 +33,16 @@ using namespace std;
 Map2DGPU::Map2DGPUEle::~Map2DGPUEle()
 {
     if(texName) pi::gl::Signal_Handle::instance().delete_texture(texName);
-    checkCudaErrors(cudaGraphicsUnregisterResource(cuda_pbo_resource));
-    glDeleteBuffersARB(1, &pbo);
+    if(cuda_pbo_resource)
+    {
+        checkCudaErrors(cudaGraphicsUnregisterResource(cuda_pbo_resource));
+        cuda_pbo_resource=NULL;
+    }
+    if(pbo)
+    {
+        glDeleteBuffersARB(1, &pbo);
+        pbo=0;
+    }
     if(img)
     {
         pi::WriteMutex lock(mutexData);
@@ -527,7 +538,7 @@ void Map2DGPU::draw()
     static bool inited=false;
     if(!inited)
     {
-        cudaGLSetGLDevice(0);
+//        cudaGLSetGLDevice(0);
         glewInit();
     }
 
