@@ -3,8 +3,6 @@
 #include "Map2D.h"
 #include <base/system/thread/ThreadBase.h>
 
-#define  ELE_PIXELS 256
-
 class Map2DRender:public Map2D,public pi::Thread
 {
     struct Map2DRenderPrepare//change when prepare

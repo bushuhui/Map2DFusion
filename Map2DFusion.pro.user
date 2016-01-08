@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE QtCreatorProject>
-<!-- Written by QtCreator 3.0.1, 2016-01-03T11:22:11. -->
+<!-- Written by QtCreator 3.0.1, 2016-01-08T16:31:47. -->
 <qtcreator>
  <data>
   <variable>ProjectExplorer.Project.ActiveTarget</variable>
@@ -195,8 +195,8 @@
     <valuelist type="QVariantList" key="PE.EnvironmentAspect.Changes"/>
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.DefaultDisplayName">Map2DFusion</value>
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName"></value>
-    <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">Qt4ProjectManager.Qt4RunConfiguration:/data/zhaoyong/Linux/Program/Apps/Tests/Map2DFusion/Map2DFusion.pro</value>
-    <value type="QString" key="Qt4ProjectManager.Qt4RunConfiguration.CommandLineArguments">conf=/data/zhaoyong/Linux/Program/Apps/Tests/Map2DFusion/Default.cfg</value>
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">Qt4ProjectManager.Qt4RunConfiguration:/data/zhaoyong/Linux/Program/Apps/Map2DFusion/Map2DFusion.pro</value>
+    <value type="QString" key="Qt4ProjectManager.Qt4RunConfiguration.CommandLineArguments">conf=/data/zhaoyong/Linux/Program/Apps/Map2DFusion/Default.cfg</value>
     <value type="QString" key="Qt4ProjectManager.Qt4RunConfiguration.ProFile">Map2DFusion.pro</value>
     <value type="bool" key="Qt4ProjectManager.Qt4RunConfiguration.UseDyldImageSuffix">false</value>
     <value type="bool" key="Qt4ProjectManager.Qt4RunConfiguration.UseTerminal">false</value>

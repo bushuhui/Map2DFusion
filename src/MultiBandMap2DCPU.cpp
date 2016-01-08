@@ -1,4 +1,6 @@
-#include "Map2DCPU.h"
+#include "MultiBandMap2DCPU.h"
+
+#ifdef MULTIBAND
 #include <gui/gl/glHelper.h>
 #include <GL/gl.h>
 #include <base/Svar/Svar.h>
@@ -6,9 +8,9 @@
 #include <gui/gl/SignalHandle.h>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/stitching/stitcher.hpp>
 
 using namespace std;
-
 
 /**
 
@@ -20,7 +22,28 @@ using namespace std;
  min
  */
 
-bool Map2DCPU::Map2DCPUData::prepare(SPtr<Map2DCPUPrepare> prepared)
+MultiBandMap2DCPU::MultiBandMap2DCPUEle::~MultiBandMap2DCPUEle()
+{
+    if(texName) pi::gl::Signal_Handle::instance().delete_texture(texName);
+}
+
+cv::Mat MultiBandMap2DCPU::MultiBandMap2DCPUEle::img()
+{
+    if(!pyr_laplace.size()) return cv::Mat();
+    else{
+        cv::Mat result;
+        for(int i=pyr_laplace.size()-1;i>0;i--)
+        {
+            cv::Mat pyr=pyr_laplace[i].clone();
+            cv::pyrUp(pyr,result,pyr_laplace[i].size());
+            cv::add(tmp)
+
+        }
+        return result;
+    }
+}
+
+bool MultiBandMap2DCPU::MultiBandMap2DCPUData::prepare(SPtr<MultiBandMap2DCPUPrepare> prepared)
 {
     if(_w||_h) return false;//already prepared
     {
@@ -70,23 +93,20 @@ bool Map2DCPU::Map2DCPUData::prepare(SPtr<Map2DCPUPrepare> prepared)
     return true;
 }
 
-Map2DCPU::Map2DCPUEle::~Map2DCPUEle()
-{
-    if(texName) pi::gl::Signal_Handle::instance().delete_texture(texName);
-}
-
-Map2DCPU::Map2DCPU(bool thread)
+MultiBandMap2DCPU::MultiBandMap2DCPU(bool thread)
     :alpha(svar.GetInt("Map2D.Alpha",0)),
-     _valid(false),_thread(thread)
+     _valid(false),_thread(thread),
+     _bandNum(svar.GetInt("Map2D.BandNumber",5))
 {
+    _bandNum=min(actual_num_bands_, static_cast<int>(ceil(log(ELE_PIXELS) / log(2.0))));
 }
 
-bool Map2DCPU::prepare(const pi::SE3d& plane,const PinHoleParameters& camera,
+bool MultiBandMap2DCPU::prepare(const pi::SE3d& plane,const PinHoleParameters& camera,
                 const std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
 {
     //insert frames
-    SPtr<Map2DCPUPrepare> p(new Map2DCPUPrepare);
-    SPtr<Map2DCPUData>    d(new Map2DCPUData);
+    SPtr<MultiBandMap2DCPUPrepare> p(new MultiBandMap2DCPUPrepare);
+    SPtr<MultiBandMap2DCPUData>    d(new MultiBandMap2DCPUData);
 
     if(p->prepare(plane,camera,frames))
         if(d->prepare(p))
@@ -103,11 +123,11 @@ bool Map2DCPU::prepare(const pi::SE3d& plane,const PinHoleParameters& camera,
     return false;
 }
 
-bool Map2DCPU::feed(cv::Mat img,const pi::SE3d& pose)
+bool MultiBandMap2DCPU::feed(cv::Mat img,const pi::SE3d& pose)
 {
     if(!_valid) return false;
-    SPtr<Map2DCPUPrepare> p;
-    SPtr<Map2DCPUData>    d;
+    SPtr<MultiBandMap2DCPUPrepare> p;
+    SPtr<MultiBandMap2DCPUData>    d;
     {
         pi::ReadMutex lock(mutex);
         p=prepared;d=data;
@@ -126,20 +146,20 @@ bool Map2DCPU::feed(cv::Mat img,const pi::SE3d& pose)
     }
 }
 
-bool Map2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
+bool MultiBandMap2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
 {
-    SPtr<Map2DCPUPrepare> p;
-    SPtr<Map2DCPUData>    d;
+    SPtr<MultiBandMap2DCPUPrepare> p;
+    SPtr<MultiBandMap2DCPUData>    d;
     {
         pi::ReadMutex lock(mutex);
         p=prepared;d=data;
     }
     if(frame.first.cols!=p->_camera.w||frame.first.rows!=p->_camera.h||frame.first.type()!=CV_8UC3)
     {
-        cerr<<"Map2DCPU::renderFrame: frame.first.cols!=p->_camera.w||frame.first.rows!=p->_camera.h||frame.first.type()!=CV_8UC3\n";
+        cerr<<"MultiBandMap2DCPU::renderFrame: frame.first.cols!=p->_camera.w||frame.first.rows!=p->_camera.h||frame.first.type()!=CV_8UC3\n";
         return false;
     }
-    // pose->pts
+    // 1. pose->pts
     std::vector<pi::Point2d>          imgPts;
     {
         imgPts.reserve(4);
@@ -163,7 +183,7 @@ bool Map2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
                 -axis*(frame.second.get_translation().z/axis.z);
         pts.push_back(pi::Point2d(axis.x,axis.y));
     }
-    // dest location?
+    // 2. dest location?
     double xmin=pts[0].x;
     double xmax=xmin;
     double ymin=pts[0].y;
@@ -201,7 +221,7 @@ bool Map2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
     int ymaxInt= ceil((ymax-d->min().y)*d->eleSizeInv());
     if(xminInt<0||yminInt<0||xmaxInt>d->w()||ymaxInt>d->h()||xminInt>=xmaxInt||yminInt>=ymaxInt)
     {
-        cerr<<"Map2DCPU::renderFrame:should never happen!\n";
+        cerr<<"MultiBandMap2DCPU::renderFrame:should never happen!\n";
         return false;
     }
     {
@@ -210,15 +230,15 @@ bool Map2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
         xmax=d->min().x+d->eleSize()*xmaxInt;
         ymax=d->min().y+d->eleSize()*ymaxInt;
     }
-    // prepare dst image
+    // 3.prepare dst image
     cv::Mat src;
     if(weightImage.empty()||weightImage.cols!=frame.first.cols||weightImage.rows!=frame.first.rows)
     {
         pi::WriteMutex lock(mutex);
         int w=frame.first.cols;
         int h=frame.first.rows;
-        weightImage.create(h,w,CV_8UC4);
-        pi::byte *p=(weightImage.data);
+        weightImage.create(h,w,CV_32FC4);
+        float *p=(weightImage.data);
         float x_center=w/2;
         float y_center=h/2;
         float dis_max=sqrt(x_center*x_center+y_center*y_center);
@@ -230,9 +250,9 @@ bool Map2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
                 dis=1-sqrt(dis)/dis_max;
                 p[1]=p[2]=p[0]=0;
                 if(0==weightType)
-                    p[3]=dis*254.;
-                else p[3]=dis*dis*254;
-                if(p[3]<2) p[3]=2;
+                    p[3]=dis;
+                else p[3]=dis*dis;
+                if(p[3]<=1e-5) p[3]=1e-5;
                 p+=4;
             }
         src=weightImage.clone();
@@ -242,13 +262,12 @@ bool Map2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
         pi::ReadMutex lock(mutex);
         src=weightImage.clone();
     }
-    pi::Array_<pi::byte,4> *psrc=(pi::Array_<pi::byte,4>*)src.data;
+    pi::Array_<float,4>    *psrc=(pi::Array_<pi::byte,4>*)src.data;
     pi::Array_<pi::byte,3> *pimg=(pi::Array_<pi::byte,3>*)frame.first.data;
-//    float weight=(frame.second.get_rotation()*pi::Point3d(0,0,1)).dot(downLook);
     for(int i=0,iend=weightImage.cols*weightImage.rows;i<iend;i++)
     {
-        *((pi::Array_<pi::byte,3>*)psrc)=*pimg;
-//        psrc->data[3]*=weight;
+        *psrc=pi::Array_<float,4>(pimg->data[0]*0.00392f,pimg->data[1]*0.00392f,
+                pimg->data[2]*0.00392f,psrc->data[3]);
         psrc++;
         pimg++;
     }
@@ -281,31 +300,54 @@ bool Map2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
     {
         cv::imshow("dst",dst);
     }
-    // apply dst to eles
+    std::vector<cv::Mat> src_pyr_laplace;
+    cv::detail::createLaplacePyr(dst, _bandNum, src_pyr_laplace);
+
+    // 4. blender dst to eles
     pi::timer.enter("Apply");
-    std::vector<SPtr<Map2DCPUEle> > dataCopy=d->data();
+    std::vector<SPtr<MultiBandMap2DCPUEle> > dataCopy=d->data();
     for(int x=xminInt;x<xmaxInt;x++)
         for(int y=yminInt;y<ymaxInt;y++)
         {
-            SPtr<Map2DCPUEle> ele=dataCopy[y*d->w()+x];
+            SPtr<MultiBandMap2DCPUEle> ele=dataCopy[y*d->w()+x];
             if(!ele.get())
             {
                 ele=d->ele(y*d->w()+x);
             }
             {
                 pi::WriteMutex lock(ele->mutexData);
-                if(ele->img.empty())
-                    ele->img=cv::Mat::zeros(ELE_PIXELS,ELE_PIXELS,dst.type());
-                pi::Array_<pi::byte,4> *eleP=(pi::Array_<pi::byte,4>*)ele->img.data;
-                pi::Array_<pi::byte,4> *dstP=(pi::Array_<pi::byte,4>*)dst.data;
-                dstP+=(x-xminInt)*ELE_PIXELS+(y-yminInt)*ELE_PIXELS*dst.cols;
-                int skip=dst.cols-ele->img.cols;
-                for(int eleY=0;eleY<ELE_PIXELS;eleY++,dstP+=skip)
-                    for(int eleX=0;eleX<ELE_PIXELS;eleX++,dstP++,eleP++)
+                if(!ele->pyr_laplace.size())
+                {
+                    ele->pyr_laplace.resize(_bandNum+1);
+                }
+
+                int width=ELE_PIXELS,height=ELE_PIXELS;
+
+                for (int i = 0; i <= _bandNum; ++i)
+                {
+                    if(ele->pyr_laplace[i].isEmpty())
                     {
-                        if(eleP->data[3]<dstP->data[3])
-                            *eleP=*dstP;
+                        //fresh
+                        ele->pyr_laplace[i]=cv::Mat::zeros(height,width,dst.type());
+                        src_pyr_laplace[i](cv::Rect(width*(x-xminInt),height*(y-yminInt),width,height)).copyTo(ele->pyr_laplace[i]);
                     }
+                    else
+                    {
+                        pi::Array_<float,4> *eleP=(pi::Array_<float,4>*)ele->pyr_laplace[i].data;
+                        pi::Array_<float,4> *srcP=(pi::Array_<float,4>*)src_pyr_laplace[i].data;
+                        srcP+=(x-xminInt)*width+(y-yminInt)*height*src_pyr_laplace[i].cols;
+                        int skip=src_pyr_laplace[i].cols-ele->pyr_laplace[i].cols;
+                        for(int eleY=0;eleY<height;eleY++,srcP+=skip)
+                            for(int eleX=0;eleX<width;eleX++,srcP++,eleP++)
+                            {
+                                eleP->data[0]+=srcP->data[0]*srcP->data[3];
+                                eleP->data[1]+=srcP->data[1]*srcP->data[3];
+                                eleP->data[2]+=srcP->data[2]*srcP->data[3];
+                                eleP->data[3]+=srcP->data[3];
+                            }
+                    }
+                    width/=2;height/=2;
+                }
                 ele->Ischanged=true;
             }
         }
@@ -315,10 +357,10 @@ bool Map2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
 }
 
 
-bool Map2DCPU::spreadMap(double xmin,double ymin,double xmax,double ymax)
+bool MultiBandMap2DCPU::spreadMap(double xmin,double ymin,double xmax,double ymax)
 {
-    pi::timer.enter("Map2DCPU::spreadMap");
-    SPtr<Map2DCPUData> d;
+    pi::timer.enter("MultiBandMap2DCPU::spreadMap");
+    SPtr<MultiBandMap2DCPUData> d;
     {
         pi::ReadMutex lock(mutex);
         d=data;
@@ -338,8 +380,8 @@ bool Map2DCPU::spreadMap(double xmin,double ymin,double xmax,double ymax)
         max.x=min.x+w*d->eleSize();
         max.y=min.y+h*d->eleSize();
     }
-    std::vector<SPtr<Map2DCPUEle> > dataOld=d->data();
-    std::vector<SPtr<Map2DCPUEle> > dataCopy;
+    std::vector<SPtr<MultiBandMap2DCPUEle> > dataOld=d->data();
+    std::vector<SPtr<MultiBandMap2DCPUEle> > dataCopy;
     dataCopy.resize(w*h);
     {
         for(int x=0,xend=d->w();x<xend;x++)
@@ -351,16 +393,16 @@ bool Map2DCPU::spreadMap(double xmin,double ymin,double xmax,double ymax)
     //apply
     {
         pi::WriteMutex lock(mutex);
-        data=SPtr<Map2DCPUData>(new Map2DCPUData(d->eleSize(),d->lengthPixel(),
+        data=SPtr<MultiBandMap2DCPUData>(new MultiBandMap2DCPUData(d->eleSize(),d->lengthPixel(),
                                                  pi::Point3d(max.x,max.y,d->max().z),
                                                  pi::Point3d(min.x,min.y,d->min().z),
                                                  w,h,dataCopy));
     }
-    pi::timer.leave("Map2DCPU::spreadMap");
+    pi::timer.leave("MultiBandMap2DCPU::spreadMap");
     return true;
 }
 
-bool Map2DCPU::getFrame(std::pair<cv::Mat,pi::SE3d>& frame)
+bool MultiBandMap2DCPU::getFrame(std::pair<cv::Mat,pi::SE3d>& frame)
 {
     pi::ReadMutex lock(mutex);
     pi::ReadMutex lock1(prepared->mutexFrames);
@@ -373,7 +415,7 @@ bool Map2DCPU::getFrame(std::pair<cv::Mat,pi::SE3d>& frame)
     else return false;
 }
 
-void Map2DCPU::run()
+void MultiBandMap2DCPU::run()
 {
     std::pair<cv::Mat,pi::SE3d> frame;
     while(!shouldStop())
@@ -382,21 +424,21 @@ void Map2DCPU::run()
         {
             if(getFrame(frame))
             {
-                pi::timer.enter("Map2DCPU::renderFrame");
+                pi::timer.enter("MultiBandMap2DCPU::renderFrame");
                 renderFrame(frame);
-                pi::timer.leave("Map2DCPU::renderFrame");
+                pi::timer.leave("MultiBandMap2DCPU::renderFrame");
             }
         }
         sleep(10);
     }
 }
 
-void Map2DCPU::draw()
+void MultiBandMap2DCPU::draw()
 {
     if(!_valid) return;
 
-    SPtr<Map2DCPUPrepare> p;
-    SPtr<Map2DCPUData>    d;
+    SPtr<MultiBandMap2DCPUPrepare> p;
+    SPtr<MultiBandMap2DCPUData>    d;
     {
         pi::ReadMutex lock(mutex);
         p=prepared;d=data;
@@ -455,7 +497,7 @@ void Map2DCPU::draw()
     }
     GLint last_texture_ID;
     glGetIntegerv(GL_TEXTURE_BINDING_2D, &last_texture_ID);
-    std::vector<SPtr<Map2DCPUEle> > dataCopy=d->data();
+    std::vector<SPtr<MultiBandMap2DCPUEle> > dataCopy=d->data();
     int wCopy=d->w(),hCopy=d->h();
     glColor3ub(255,255,255);
     for(int x=0;x<wCopy;x++)
@@ -466,7 +508,7 @@ void Map2DCPU::draw()
             float y0=d->min().y+y*d->eleSize();
             float x1=x0+d->eleSize();
             float y1=y0+d->eleSize();
-            SPtr<Map2DCPUEle> ele=dataCopy[idxData];
+            SPtr<MultiBandMap2DCPUEle> ele=dataCopy[idxData];
             if(!ele.get())  continue;
             if(ele->img.empty()) continue;
             if(ele->texName==0)
@@ -499,11 +541,11 @@ void Map2DCPU::draw()
     glPopMatrix();
 }
 
-bool Map2DCPU::save(const std::string& filename)
+bool MultiBandMap2DCPU::save(const std::string& filename)
 {
     // determin minmax
-    SPtr<Map2DCPUPrepare> p;
-    SPtr<Map2DCPUData>    d;
+    SPtr<MultiBandMap2DCPUPrepare> p;
+    SPtr<MultiBandMap2DCPUData>    d;
     {
         pi::ReadMutex lock(mutex);
         p=prepared;d=data;
@@ -514,7 +556,7 @@ bool Map2DCPU::save(const std::string& filename)
     for(int x=0;x<d->w();x++)
         for(int y=0;y<d->h();y++)
         {
-            SPtr<Map2DCPUEle> ele=d->data()[x+y*d->w()];
+            SPtr<MultiBandMap2DCPUEle> ele=d->data()[x+y*d->w()];
             if(!ele.get()) continue;
             {
                 pi::ReadMutex lock(ele->mutexData);
@@ -530,7 +572,7 @@ bool Map2DCPU::save(const std::string& filename)
     for(int x=minInt.x;x<maxInt.x;x++)
         for(int y=minInt.y;y<maxInt.y;y++)
         {
-            SPtr<Map2DCPUEle> ele=d->data()[x+y*d->w()];
+            SPtr<MultiBandMap2DCPUEle> ele=d->data()[x+y*d->w()];
             if(!ele.get()) continue;
             {
                 pi::ReadMutex lock(ele->mutexData);
@@ -541,3 +583,4 @@ bool Map2DCPU::save(const std::string& filename)
     cv::imwrite(filename,result);
     return true;
 }
+#endif

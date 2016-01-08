@@ -1,44 +1,37 @@
-#ifndef MAP2DGPU_H
-#define MAP2DGPU_H
+#define MULTIBAND
+
+#ifdef MULTIBAND
+#ifndef MultiBandMap2DCPU_H
+#define MultiBandMap2DCPU_H
 #include "Map2D.h"
-#include "Map2DCPU.h"
-#ifdef HAS_CUDA
+#include <base/system/thread/ThreadBase.h>
 
-#include <cuda_runtime.h>
 
-typedef Map2DPrepare Map2DGPUPrepare;
-
-class Map2DGPU:public Map2D,public pi::Thread
+class MultiBandMap2DCPU:public Map2D,public pi::Thread
 {
+    typedef Map2DPrepare MultiBandMap2DCPUPrepare;
 
-    struct Map2DGPUEle
+    struct MultiBandMap2DCPUEle
     {
-        Map2DGPUEle()
-            :img(NULL),texName(0),Ischanged(false)
-        {
-        }
-        ~Map2DGPUEle();
-
-        bool updateTextureGPU();
-        bool updateTextureCPU();
-
-        float4* img;//BGRA
+        MultiBandMap2DCPUEle():texName(0),Ischanged(false){}
+        ~MultiBandMap2DCPUEle();
+        cv::Mat img();
+        std::vector<cv::Mat> pyr_laplace;
         uint    texName;
-
         bool    Ischanged;
         pi::MutexRW mutexData;
     };
 
-    struct Map2DGPUData//change when spread and prepare
+    struct MultiBandMap2DCPUData//change when spread and prepare
     {
-        Map2DGPUData():_w(0),_h(0){}
-        Map2DGPUData(double eleSize_,double lengthPixel_,pi::Point3d max_,pi::Point3d min_,
-                     int w_,int h_,const std::vector<SPtr<Map2DGPUEle> >& d_)
+        MultiBandMap2DCPUData():_w(0),_h(0){}
+        MultiBandMap2DCPUData(double eleSize_,double lengthPixel_,pi::Point3d max_,pi::Point3d min_,
+                     int w_,int h_,const std::vector<SPtr<MultiBandMap2DCPUEle> >& d_)
             :_eleSize(eleSize_),_eleSizeInv(1./eleSize_),
               _lengthPixel(lengthPixel_),_lengthPixelInv(1./lengthPixel_),
               _min(min_),_max(max_),_w(w_),_h(h_),_data(d_){}
 
-        bool   prepare(SPtr<Map2DGPUPrepare> prepared);// only done Once!
+        bool   prepare(SPtr<MultiBandMap2DCPUPrepare> prepared);// only done Once!
 
         double eleSize()const{return _eleSize;}
         double lengthPixel()const{return _lengthPixel;}
@@ -49,16 +42,16 @@ class Map2DGPU:public Map2D,public pi::Thread
         const int w()const{return _w;}
         const int h()const{return _h;}
 
-        std::vector<SPtr<Map2DGPUEle> > data()
+        std::vector<SPtr<MultiBandMap2DCPUEle> > data()
         {pi::ReadMutex lock(mutexData);return _data;}
 
-        SPtr<Map2DGPUEle> ele(uint idx)
+        SPtr<MultiBandMap2DCPUEle> ele(uint idx)
         {
             pi::WriteMutex lock(mutexData);
-            if(idx>_data.size()) return SPtr<Map2DGPUEle>();
+            if(idx>_data.size()) return SPtr<MultiBandMap2DCPUEle>();
             else if(!_data[idx].get())
             {
-                _data[idx]=SPtr<Map2DGPUEle>(new Map2DGPUEle());
+                _data[idx]=SPtr<MultiBandMap2DCPUEle>(new MultiBandMap2DCPUEle());
             }
             return _data[idx];
         }
@@ -68,15 +61,15 @@ class Map2DGPU:public Map2D,public pi::Thread
         double      _eleSize,_lengthPixel,_eleSizeInv,_lengthPixelInv;
         pi::Point3d _max,_min;
         int         _w,_h;
-        std::vector<SPtr<Map2DGPUEle> >  _data;
+        std::vector<SPtr<MultiBandMap2DCPUEle> >  _data;
         pi::MutexRW mutexData;
     };
 
 public:
 
-    Map2DGPU(bool thread=true);
+    MultiBandMap2DCPU(bool thread=true);
 
-    virtual ~Map2DGPU(){_valid=false;}
+    virtual ~MultiBandMap2DCPU(){_valid=false;}
 
     virtual bool prepare(const pi::SE3d& plane,const PinHoleParameters& camera,
                     const std::deque<std::pair<cv::Mat,pi::SE3d> >& frames);
@@ -102,14 +95,13 @@ private:
 
 
     //source
-    SPtr<Map2DGPUPrepare>             prepared;
-    SPtr<Map2DGPUData>                data;
+    SPtr<MultiBandMap2DCPUPrepare>             prepared;
+    SPtr<MultiBandMap2DCPUData>                data;
     pi::MutexRW                       mutex;
 
-    bool                              _valid,_thread,_changed;
+    bool                              _valid,_thread,_changed,_bandNum;
     cv::Mat                           weightImage;
     int&                              alpha;
 };
-
-#endif // HAS_GPU
-#endif // MAP2DGPU_H
+#endif // MULTIBANDMap2DCPU_H
+#endif

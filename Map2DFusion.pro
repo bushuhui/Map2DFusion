@@ -12,14 +12,16 @@ SOURCES += src/main.cpp \
     src/Map2D.cpp \
     src/Map2DCPU.cpp \
     src/Map2DRender.cpp \
-    src/Map2DGPU.cpp
+    src/Map2DGPU.cpp \
+    src/MultiBandMap2DCPU.cpp
 
 HEADERS += \
     src/Map2D.h \
     src/Map2DCPU.h \
     src/Map2DRender.h \
     src/Map2DGPU.h \
-    src/UtilGPU.cuh
+    src/UtilGPU.cuh \
+    src/MultiBandMap2DCPU.h
 
 # List CUDA source files on the filetree in QtCreator
 OTHER_FILES += \

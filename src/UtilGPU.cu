@@ -4,6 +4,74 @@
 #include <stdio.h>
 #include <base/time/Global_Timer.h>
 
+__global__ void pyrDown(float4* in_data,int in_rows,int in_cols,float4* out_data,int out_rows,int out_cols)
+{
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (y < out_rows &&  x< out_cols)
+    {
+        float4* in_ptr=in_data+(y<<2)*out_cols+(x<<1);//in_data+y*2*in_cols+2*x=in_data[2*y][2*x]
+        out_data[x+y*out_cols].x=0.25*(in_ptr[0].x+in_ptr[1].x+in_ptr[in_cols].x+in_ptr[in_cols+1].x);
+        out_data[x+y*out_cols].y=0.25*(in_ptr[0].y+in_ptr[1].y+in_ptr[in_cols].y+in_ptr[in_cols+1].y);
+        out_data[x+y*out_cols].z=0.25*(in_ptr[0].z+in_ptr[1].z+in_ptr[in_cols].z+in_ptr[in_cols+1].z);
+        out_data[x+y*out_cols].w=0.25*(in_ptr[0].w+in_ptr[1].w+in_ptr[in_cols].w+in_ptr[in_cols+1].w);
+    }
+}
+
+__global__ void pyrDownArray(float4** in_data,int in_rows,int in_cols,float4** out_datas,int out_rows,int out_cols,int num)
+{
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (y < out_rows &&  x< out_cols)
+    {
+        for(int i=0;i<num;i++)
+        {
+            float4* in_ptr=in_data[i]+(y<<2)*out_cols+(x<<1);//in_data+y*2*in_cols+2*x=in_data[2*y][2*x]
+            float4* out_ptr=out_datas[i]+x+y*out_cols;
+            (*out_ptr).x=0.25*(in_ptr[0].x+in_ptr[1].x+in_ptr[in_cols].x+in_ptr[in_cols+1].x);
+            (*out_ptr).y=0.25*(in_ptr[0].y+in_ptr[1].y+in_ptr[in_cols].y+in_ptr[in_cols+1].y);
+            (*out_ptr).z=0.25*(in_ptr[0].z+in_ptr[1].z+in_ptr[in_cols].z+in_ptr[in_cols+1].z);
+            (*out_ptr).w=0.25*(in_ptr[0].w+in_ptr[1].w+in_ptr[in_cols].w+in_ptr[in_cols+1].w);
+        }
+    }
+}
+
+__global__ void pyrUp(float4* in_data,int in_rows,int in_cols,float4* out_data,int out_rows,int out_cols)
+{
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (y < out_rows &&  x< out_cols)
+    {
+        float4* in_ptr=in_data+(y>>1)*in_cols+(x<<1);//in_data+y*2*in_cols+2*x=in_data[2*y][2*x]
+        out_data[x+y*out_cols].x=0.25*(in_ptr[0].x+in_ptr[1].x+in_ptr[in_cols].x+in_ptr[in_cols+1].x);
+        out_data[x+y*out_cols].y=0.25*(in_ptr[0].y+in_ptr[1].y+in_ptr[in_cols].y+in_ptr[in_cols+1].y);
+        out_data[x+y*out_cols].z=0.25*(in_ptr[0].z+in_ptr[1].z+in_ptr[in_cols].z+in_ptr[in_cols+1].z);
+        out_data[x+y*out_cols].w=0.25*(in_ptr[0].w+in_ptr[1].w+in_ptr[in_cols].w+in_ptr[in_cols+1].w);
+    }
+}
+
+__global__ void pyrUpArray(float4** in_data,int in_rows,int in_cols,float4** out_datas,int out_rows,int out_cols,int num)
+{
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (y < out_rows &&  x< out_cols)
+    {
+        for(int i=0;i<num;i++)
+        {
+            float4* in_ptr=in_data[i]+(y<<2)*out_cols+(x<<1);//in_data+y*2*in_cols+2*x=in_data[2*y][2*x]
+            float4* out_ptr=out_datas[i]+x+y*out_cols;
+            (*out_ptr).x=0.25*(in_ptr[0].x+in_ptr[1].x+in_ptr[in_cols].x+in_ptr[in_cols+1].x);
+            (*out_ptr).y=0.25*(in_ptr[0].y+in_ptr[1].y+in_ptr[in_cols].y+in_ptr[in_cols+1].y);
+            (*out_ptr).z=0.25*(in_ptr[0].z+in_ptr[1].z+in_ptr[in_cols].z+in_ptr[in_cols+1].z);
+            (*out_ptr).w=0.25*(in_ptr[0].w+in_ptr[1].w+in_ptr[in_cols].w+in_ptr[in_cols+1].w);
+        }
+    }
+}
+
 template <class T>
 __global__ void warpPerspectiveKernel(int in_rows,int in_cols,T* in_data,
                                       int out_rows,int out_cols,T* out_data,
@@ -264,12 +332,21 @@ __global__ void renderFramesKernel(int in_rows,int in_cols,uchar3* in_data,//ima
                         srcW=1e5*srcW/(difX*difX+difY*difY+1000);
                     }
                 }
-                if(fresh||ptrOut->w<=srcW)
+                if(fresh)
                 {
                     uchar3* ptrIn =in_data +(int)srcX+((int)srcY)*in_cols;
                     ptrOut->x=ptrIn->x*0.00392f;//~=/256
                     ptrOut->y=ptrIn->y*0.00392f;
                     ptrOut->z=ptrIn->z*0.00392f;
+                    ptrOut->w=srcW;
+                }
+                else if(ptrOut->w<=srcW)
+                {
+                    uchar3* ptrIn =in_data +(int)srcX+((int)srcY)*in_cols;
+                    float   sumweightInv=1./(ptrOut->w*2+srcW);
+                    ptrOut->x=(ptrOut->x*ptrOut->w*2+ptrIn->x*0.00392f*srcW)*sumweightInv;//~=/256
+                    ptrOut->y=(ptrOut->y*ptrOut->w*2+ptrIn->y*0.00392f*srcW)*sumweightInv;
+                    ptrOut->z=(ptrOut->z*ptrOut->w*2+ptrIn->z*0.00392f*srcW)*sumweightInv;
                     ptrOut->w=srcW;
                 }
             }

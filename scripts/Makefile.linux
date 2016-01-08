@@ -39,16 +39,16 @@ HereFolderName  = $(shell pwd |sed 's/^\(.*\)[/]//' )
 sinclude ./config.mk
 
 TOPDIR		?= .
-SRC_PATH    ?= .
+SRC_PATH    	?= .
 BUILD_PATH	?= $(TOPDIR)/build
 LIBS_PATH	?= $(TOPDIR)/libs
-BIN_PATH    ?= $(TOPDIR)/bin
-OUTPUT      ?= $(HereFolderName)
+BIN_PATH    	?= $(TOPDIR)/bin
+OUTPUT      	?= $(HereFolderName)
 
-MAKE_TYPE   ?= bin #shared static
+MAKE_TYPE   	?= bin #shared static
 
 
-LIB_PREFIX  ?= lib
+LIB_PREFIX  	?= lib
 
 ifeq "$(MAKE_TYPE)" "bin"
 OUTPUT_NAME ?= $(BIN_PATH)/$(LIB_PREFIX)$(OUTPUT)$(EXEEXT)

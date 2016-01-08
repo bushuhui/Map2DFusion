@@ -18,7 +18,9 @@
 using namespace std;
 
 cudaGraphicsResource* cuda_pbo_resource=NULL;
-uint    pbo=0;
+uint                  pbo=0;
+int                   blenderBandNum=1;
+uint                  eleImageDataSize=0;
 
 /**
 
@@ -91,7 +93,6 @@ bool Map2DGPU::Map2DGPUEle::updateTextureGPU()
         checkCudaErrors(cudaGraphicsGLRegisterBuffer(&cuda_pbo_resource, pbo, cudaGraphicsMapFlagsWriteDiscard));
     }
     //flush data from ele->img to ele->cuda_pbo_resource
-    if(1)
     {
         checkCudaErrors(cudaGraphicsMapResources(1, &cuda_pbo_resource, 0));
         size_t bytesNum;
@@ -99,7 +100,8 @@ bool Map2DGPU::Map2DGPUEle::updateTextureGPU()
         checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **)&pboData, &bytesNum, cuda_pbo_resource));
         if(num_bytes==bytesNum)
         {
-            checkCudaErrors(cudaMemcpy(pboData,img,bytesNum,cudaMemcpyDeviceToDevice));
+            if(blenderBandNum==1)
+                checkCudaErrors(cudaMemcpy(pboData,img,bytesNum,cudaMemcpyDeviceToDevice));
         }
         checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0));
     }
@@ -124,25 +126,6 @@ bool Map2DGPU::Map2DGPUEle::updateTextureGPU()
                         GL_BGRA, GL_FLOAT, NULL);
     }
     Ischanged=false;
-}
-
-bool Map2DGPU::Map2DGPUPrepare::prepare(const pi::SE3d& plane,const PinHoleParameters& camera,
-                                        const std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
-{
-    if(frames.size()==0||camera.w<=0||camera.h<=0||camera.fx==0||camera.fy==0)
-    {
-        cerr<<"Map2DGPU::Map2DGPUPrepare::prepare:Not valid prepare!\n";
-        return false;
-    }
-    _camera=camera;_fxinv=1./camera.fx;_fyinv=1./camera.fy;
-    _plane =plane;
-    _frames=frames;
-    for(std::deque<std::pair<cv::Mat,pi::SE3d> >::iterator it=_frames.begin();it!=_frames.end();it++)
-    {
-        pi::SE3d& pose=it->second;
-        pose=plane.inverse()*pose;//plane coordinate
-    }
-    return true;
 }
 
 bool Map2DGPU::Map2DGPUData::prepare(SPtr<Map2DGPUPrepare> prepared)
@@ -199,7 +182,15 @@ Map2DGPU::Map2DGPU(bool thread)
     :alpha(svar.GetInt("Map2D.Alpha",0)),
      _valid(false),_thread(thread)
 {
-
+    {
+        eleImageDataSize=0;
+        int levSize=sizeof(float4)*ELE_PIXELS*ELE_PIXELS;
+        for(int i=0;i<blenderBandNum;i++)
+        {
+            eleImageDataSize+=levSize;
+            levSize=levSize>>2;
+        }
+    }
     // Otherwise pick the device with highest Gflops/s
 //    int devID = gpuGetMaxGflopsDeviceId();
 }

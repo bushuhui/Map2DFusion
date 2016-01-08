@@ -42,6 +42,11 @@ public:
             {
                 pi::timer.enter("Map2D::feed");
                 map->feed(frame.first,frame.second);
+                if(win3d.get()&&tictac.Tac()>0.033)
+                {
+                    tictac.Tic();
+                    win3d->update();
+                }
                 pi::timer.leave("Map2D::feed");
             }
         }
@@ -78,7 +83,9 @@ public:
         string imgfile;
         ifs>>imgfile;
         imgfile=datapath+"/"+imgfile+".png";
+        pi::timer.enter("obtainFrame");
         frame.first=cv::imread(imgfile);
+        pi::timer.leave("obtainFrame");
         if(frame.first.empty()) return false;
         ifs>>frame.second;
         return true;
@@ -141,6 +148,7 @@ public:
             win3d->insert(map);
             win3d->setSceneRadius(1000);
             win3d->Show();
+            tictac.Tic();
         }
         else
         {
@@ -159,6 +167,11 @@ public:
                     if(!obtainFrame(frame)) break;
                     map->feed(frame.first,frame.second);
                 }
+                if(win3d.get()&&tictac.Tac()>0.033)
+                {
+                    tictac.Tic();
+                    win3d->update();
+                }
                 rate.sleep();
             }
         }
@@ -172,6 +185,7 @@ public:
         else cout<<"No act "<<act<<"!\n";
     }
     string        datapath;
+    pi::TicTac    tictac;
     SPtr<pi::gl::Win3D> win3d;
     SPtr<ifstream>      in;
     SPtr<Map2D>   map;

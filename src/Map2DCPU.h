@@ -7,39 +7,7 @@
 
 class Map2DCPU:public Map2D,public pi::Thread
 {
-    struct Map2DCPUPrepare//change when prepare
-    {
-        uint queueSize(){pi::ReadMutex lock(mutexFrames);
-                      return _frames.size();}
-
-        bool prepare(const pi::SE3d& plane,const PinHoleParameters& camera,
-                     const std::deque<std::pair<cv::Mat,pi::SE3d> >& frames);
-
-        pi::Point2d Project(const pi::Point3d& pt)
-        {
-            double zinv=1./pt.z;
-            return pi::Point2d(_camera.fx*pt.x*zinv+_camera.cx,
-                               _camera.fy*pt.y*zinv+_camera.cy);
-        }
-
-        pi::Point3d UnProject(const pi::Point2d& pt)
-        {
-            return pi::Point3d((pt.x-_camera.cx)*_fxinv,
-                               (pt.y-_camera.cy)*_fyinv,1.);
-        }
-
-        std::deque<std::pair<cv::Mat,pi::SE3d> > getFrames()
-        {
-            pi::ReadMutex lock(mutexFrames);
-            return _frames;
-        }
-
-        PinHoleParameters                        _camera;
-        double                                   _fxinv,_fyinv;
-        pi::SE3d                                 _plane;//all fixed
-        std::deque<std::pair<cv::Mat,pi::SE3d> > _frames;//camera coordinate
-        pi::MutexRW                              mutexFrames;
-    };
+    typedef Map2DPrepare Map2DCPUPrepare;
 
     struct Map2DCPUEle
     {

@@ -56,3 +56,5 @@ CUDAFLAGS	?= -arch sm_35 -c -Xptxas -v -Xcompiler -m${TARGET_SIZE},-pipe -DHAS_C
 CUDAFLAGS    	+= $(foreach n,$(MODULES),$($(n)_CFLAGS))
 CUDAFLAGS   	+= $(foreach n,$(INCLUDE_PATH),-I$(n))
 CUDAFLAGS	+= $(foreach n,$(DEFINES),-D$($(n)))
+
+
