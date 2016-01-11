@@ -37,6 +37,16 @@ bool MultiBandMap2DCPU::MultiBandMap2DCPUEle::normalizeUsingWeightMap(const cv::
     return true;
 }
 
+bool MultiBandMap2DCPU::MultiBandMap2DCPUEle::mulWeightMap(const cv::Mat& weight, cv::Mat& src)
+{
+    if(!(src.type()==CV_32FC3&&weight.type()==CV_32FC1)) return false;
+    pi::Point3f* srcP=(pi::Point3f*)src.data;
+    float*    weightP=(float*)weight.data;
+    for(float* Pend=weightP+weight.cols*weight.rows;weightP!=Pend;weightP++,srcP++)
+        *srcP=(*srcP)*(*weightP);
+    return true;
+}
+
 cv::Mat MultiBandMap2DCPU::MultiBandMap2DCPUEle::blend()
 {
     if(!pyr_laplace.size()) return cv::Mat();
@@ -45,7 +55,7 @@ cv::Mat MultiBandMap2DCPU::MultiBandMap2DCPUEle::blend()
         for(int i=0;i<pyr_laplace.size();i++)
         {
             pyr_laplaceClone[i]=pyr_laplace[i].clone();
-            normalizeUsingWeightMap(weights[i],pyr_laplaceClone[i]);
+//            normalizeUsingWeightMap(weights[i],pyr_laplaceClone[i]);
         }
 
         cv::detail::restoreImageFromLaplacePyr(pyr_laplaceClone);
@@ -335,7 +345,7 @@ bool MultiBandMap2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
 
     cv::Mat weight_warped((ymaxInt-yminInt)*ELE_PIXELS,(xmaxInt-xminInt)*ELE_PIXELS,CV_32FC1);
     cv::Mat image_warped((ymaxInt-yminInt)*ELE_PIXELS,(xmaxInt-xminInt)*ELE_PIXELS,img_src.type());
-    cv::warpPerspective(img_src, image_warped, transmtx, image_warped.size(),cv::INTER_LINEAR);
+    cv::warpPerspective(img_src, image_warped, transmtx, image_warped.size(),cv::INTER_LINEAR,cv::BORDER_REFLECT);
     cv::warpPerspective(weight_src, weight_warped, transmtx, weight_warped.size(),cv::INTER_NEAREST);
 
     if(svar.GetInt("ShowWarped",0))
@@ -350,21 +360,32 @@ bool MultiBandMap2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
     cv::detail::createLaplacePyr(image_warped, _bandNum, pyr_laplace);
 
     std::vector<cv::Mat> pyr_weights(_bandNum+1);
-    cv::copyMakeBorder(image_warped,image_warped,0,0,0,0,cv::BORDER_REFLECT);
-    cv::copyMakeBorder(weight_warped, pyr_weights[0], 0, 0, 0, 0,cv::BORDER_CONSTANT);
-//    pyr_weights[0]=weight_warped;
+//    cv::copyMakeBorder(image_warped,image_warped,0,0,0,0,cv::BORDER_REFLECT);
+//    cv::copyMakeBorder(weight_warped, pyr_weights[0], 0, 0, 0, 0,cv::BORDER_CONSTANT);
+    pyr_weights[0]=weight_warped;
     for (int i = 0; i < _bandNum; ++i)
         cv::pyrDown(pyr_weights[i], pyr_weights[i + 1]);
 
     if(svar.GetInt("ShowLaplaceResult",0))
     {
         stringstream name;
-        for(int i=0;i<=_bandNum;i++)
+        for(int i=0;i<=0;i++)
         {
             name<<i;
             cv::imshow("LaplacePyr"+name.str(),pyr_laplace[i]);
-            cv::imshow("WeightPyr"+name.str(),pyr_weights[i]);
+//            cv::imshow("WeightPyr"+name.str(),pyr_weights[i]);
         }
+        vector<cv::Mat> pyr_laplaceClone(pyr_laplace.size());
+        for(int i=0;i<pyr_laplace.size();i++)
+        {
+            pyr_laplaceClone[i]=pyr_laplace[i].clone();
+            MultiBandMap2DCPUEle::mulWeightMap(pyr_weights[i],pyr_laplaceClone[i]);
+            MultiBandMap2DCPUEle::normalizeUsingWeightMap(pyr_weights[i],pyr_laplaceClone[i]);
+        }
+
+        cv::detail::restoreImageFromLaplacePyr(pyr_laplaceClone);
+
+        cv::imshow("imgRestore",pyr_laplaceClone[0]);
     }
 
     std::vector<SPtr<MultiBandMap2DCPUEle> > dataCopy=d->data();
@@ -394,10 +415,9 @@ bool MultiBandMap2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
                         cv::Rect rect(width*(x-xminInt),height*(y-yminInt),width,height);
                         ele->pyr_laplace[i]=cv::Mat::zeros(height,width,pyr_laplace[i].type());
                         ele->weights[i]    =cv::Mat::zeros(height,width,pyr_weights[i].type());
-                        pyr_laplace[i](rect).copyTo(ele->pyr_laplace[i]);
-                        pyr_weights[i](rect).copyTo(ele->weights[i]);
+//                        pyr_laplace[i](rect).copyTo(ele->pyr_laplace[i]);
+//                        pyr_weights[i](rect).copyTo(ele->weights[i]);
                     }
-                    else
                     {
                         if(pyr_laplace[i].type()==CV_32FC3)
                         {

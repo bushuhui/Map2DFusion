@@ -64,7 +64,7 @@ INCLUDEPATH += $$OPENCV_TOP/include $$OPENCV_TOP/include/opencv ../3rdparty/incl
 ################################################################################
 # PIL settings
 ################################################################################
-TOPDIR=/data/zhaoyong/Linux/Program/Apps/Tests/Map2DFusion
+TOPDIR=/data/zhaoyong/Linux/Program/Apps/Map2DFusion
 PIL_TOP=$$TOPDIR/PIL
 LIBS_DIR=$$TOPDIR/libs
 INCLUDEPATH += $$PIL_TOP/src $$PIL_TOP/Thirdparty
