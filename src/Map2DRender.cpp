@@ -13,6 +13,238 @@
 
 using namespace std;
 
+namespace Map2DFusion {
+#define WEIGHT_EPS (1e-5)
+
+bool mulWeightMap(const cv::Mat& weight, cv::Mat& src)
+{
+    if(!(src.type()==CV_16SC3&&weight.type()==CV_32FC1)) return false;
+    pi::Point3_<int16_t>* srcP=(pi::Point3_<int16_t>*)src.data;
+    float*    weightP=(float*)weight.data;
+    for(float* Pend=weightP+weight.cols*weight.rows;weightP!=Pend;weightP++,srcP++)
+        *srcP=(*srcP)*(*weightP);
+    return true;
+}
+
+class CV_EXPORTS MultiBandBlender : public cv::detail::Blender
+{
+public:
+    MultiBandBlender(int try_gpu = false, int num_bands = 5, int weight_type = CV_32F)
+    {
+        setNumBands(num_bands);
+    #if defined(HAVE_OPENCV_GPU) && !defined(DYNAMIC_CUDA_SUPPORT)
+        can_use_gpu_ = try_gpu && gpu::getCudaEnabledDeviceCount();
+    #else
+        (void)try_gpu;
+        can_use_gpu_ = false;
+    #endif
+        CV_Assert(weight_type == CV_32F || weight_type == CV_16S);
+        weight_type_ = weight_type;
+    }
+
+    int numBands() const { return actual_num_bands_; }
+    void setNumBands(int val) { actual_num_bands_ = val; }
+
+    void prepare(cv::Rect dst_roi)
+    {
+        using namespace cv;
+        dst_roi_final_ = dst_roi;
+
+        // Crop unnecessary bands
+        double max_len = static_cast<double>(max(dst_roi.width, dst_roi.height));
+        num_bands_ = min(actual_num_bands_, static_cast<int>(ceil(log(max_len) / log(2.0))));
+
+        // Add border to the final image, to ensure sizes are divided by (1 << num_bands_)
+        dst_roi.width += ((1 << num_bands_) - dst_roi.width % (1 << num_bands_)) % (1 << num_bands_);
+        dst_roi.height += ((1 << num_bands_) - dst_roi.height % (1 << num_bands_)) % (1 << num_bands_);
+
+        Blender::prepare(dst_roi);
+
+        dst_pyr_laplace_.resize(num_bands_ + 1);
+        dst_pyr_laplace_[0] = dst_;
+
+        dst_band_weights_.resize(num_bands_ + 1);
+        dst_band_weights_[0].create(dst_roi.size(), weight_type_);
+        dst_band_weights_[0].setTo(0);
+
+        for (int i = 1; i <= num_bands_; ++i)
+        {
+            dst_pyr_laplace_[i].create((dst_pyr_laplace_[i - 1].rows + 1) / 2,
+                                       (dst_pyr_laplace_[i - 1].cols + 1) / 2, CV_16SC3);
+            dst_band_weights_[i].create((dst_band_weights_[i - 1].rows + 1) / 2,
+                                        (dst_band_weights_[i - 1].cols + 1) / 2, weight_type_);
+            dst_pyr_laplace_[i].setTo(Scalar::all(0));
+            dst_band_weights_[i].setTo(0);
+        }
+    }
+    void feed(const cv::Mat &img, const cv::Mat &mask, cv::Point tl)
+    {
+        using namespace cv;
+        using namespace cv::detail;
+        CV_Assert(img.type() == CV_16SC3 || img.type() == CV_8UC3);
+        CV_Assert(mask.type() == CV_8U);
+
+        // Keep source image in memory with small border
+        int gap = 3 * (1 << num_bands_);
+        Point tl_new(max(dst_roi_.x, tl.x - gap),
+                     max(dst_roi_.y, tl.y - gap));
+        Point br_new(min(dst_roi_.br().x, tl.x + img.cols + gap),
+                     min(dst_roi_.br().y, tl.y + img.rows + gap));
+
+        // Ensure coordinates of top-left, bottom-right corners are divided by (1 << num_bands_).
+        // After that scale between layers is exactly 2.
+        //
+        // We do it to avoid interpolation problems when keeping sub-images only. There is no such problem when
+        // image is bordered to have size equal to the final image size, but this is too memory hungry approach.
+        tl_new.x = dst_roi_.x + (((tl_new.x - dst_roi_.x) >> num_bands_) << num_bands_);
+        tl_new.y = dst_roi_.y + (((tl_new.y - dst_roi_.y) >> num_bands_) << num_bands_);
+        int width = br_new.x - tl_new.x;
+        int height = br_new.y - tl_new.y;
+        width += ((1 << num_bands_) - width % (1 << num_bands_)) % (1 << num_bands_);
+        height += ((1 << num_bands_) - height % (1 << num_bands_)) % (1 << num_bands_);
+        br_new.x = tl_new.x + width;
+        br_new.y = tl_new.y + height;
+        int dy = max(br_new.y - dst_roi_.br().y, 0);
+        int dx = max(br_new.x - dst_roi_.br().x, 0);
+        tl_new.x -= dx; br_new.x -= dx;
+        tl_new.y -= dy; br_new.y -= dy;
+
+        int top = tl.y - tl_new.y;
+        int left = tl.x - tl_new.x;
+        int bottom = br_new.y - tl.y - img.rows;
+        int right = br_new.x - tl.x - img.cols;
+
+        // Create the source image Laplacian pyramid
+        Mat img_with_border;
+        copyMakeBorder(img, img_with_border, top, bottom, left, right,
+                       BORDER_REFLECT);
+        vector<Mat> src_pyr_laplace;
+        if (can_use_gpu_ && img_with_border.depth() == CV_16S)
+            createLaplacePyrGpu(img_with_border, num_bands_, src_pyr_laplace);
+        else
+            createLaplacePyr(img_with_border, num_bands_, src_pyr_laplace);
+
+        // Create the weight map Gaussian pyramid
+        Mat weight_map;
+        vector<Mat> weight_pyr_gauss(num_bands_ + 1);
+
+        if(weight_type_ == CV_32F)
+        {
+            mask.convertTo(weight_map, CV_32F, 1./255.);
+        }
+        else// weight_type_ == CV_16S
+        {
+            mask.convertTo(weight_map, CV_16S);
+            add(weight_map, 1, weight_map, mask != 0);
+        }
+
+        copyMakeBorder(weight_map, weight_pyr_gauss[0], top, bottom, left, right, BORDER_CONSTANT);
+
+        for (int i = 0; i < num_bands_; ++i)
+            pyrDown(weight_pyr_gauss[i], weight_pyr_gauss[i + 1]);
+
+        int y_tl = tl_new.y - dst_roi_.y;
+        int y_br = br_new.y - dst_roi_.y;
+        int x_tl = tl_new.x - dst_roi_.x;
+        int x_br = br_new.x - dst_roi_.x;
+
+        if(svar.GetInt("Map2DRender.ShowPyrLaplace",1))
+        {
+            vector<cv::Mat> pyr_laplaceClone(src_pyr_laplace.size());
+            for(int i=0;i<src_pyr_laplace.size();i++)
+            {
+                pyr_laplaceClone[i]=src_pyr_laplace[i].clone();
+                mulWeightMap(weight_pyr_gauss[i],pyr_laplaceClone[i]);
+                normalizeUsingWeightMap(weight_pyr_gauss[i],pyr_laplaceClone[i]);
+            }
+            restoreImageFromLaplacePyr(pyr_laplaceClone);
+            cv::Mat result=pyr_laplaceClone[0];
+            result.convertTo(result,CV_8U);
+            cv::imshow("restoreImage",result);
+        }
+        // Add weighted layer of the source image to the final Laplacian pyramid layer
+        if(weight_type_ == CV_32F)
+        {
+            for (int i = 0; i <= num_bands_; ++i)
+            {
+                for (int y = y_tl; y < y_br; ++y)
+                {
+                    int y_ = y - y_tl;
+                    const Point3_<short>* src_row = src_pyr_laplace[i].ptr<Point3_<short> >(y_);
+                    Point3_<short>* dst_row = dst_pyr_laplace_[i].ptr<Point3_<short> >(y);
+                    const float* weight_row = weight_pyr_gauss[i].ptr<float>(y_);
+                    float* dst_weight_row = dst_band_weights_[i].ptr<float>(y);
+
+                    for (int x = x_tl; x < x_br; ++x)
+                    {
+                        int x_ = x - x_tl;
+                        dst_row[x].x += static_cast<short>(src_row[x_].x * weight_row[x_]);
+                        dst_row[x].y += static_cast<short>(src_row[x_].y * weight_row[x_]);
+                        dst_row[x].z += static_cast<short>(src_row[x_].z * weight_row[x_]);
+                        dst_weight_row[x] += weight_row[x_];
+                    }
+                }
+                x_tl /= 2; y_tl /= 2;
+                x_br /= 2; y_br /= 2;
+            }
+        }
+        else// weight_type_ == CV_16S
+        {
+            for (int i = 0; i <= num_bands_; ++i)
+            {
+                for (int y = y_tl; y < y_br; ++y)
+                {
+                    int y_ = y - y_tl;
+                    const Point3_<short>* src_row = src_pyr_laplace[i].ptr<Point3_<short> >(y_);
+                    Point3_<short>* dst_row = dst_pyr_laplace_[i].ptr<Point3_<short> >(y);
+                    const short* weight_row = weight_pyr_gauss[i].ptr<short>(y_);
+                    short* dst_weight_row = dst_band_weights_[i].ptr<short>(y);
+
+                    for (int x = x_tl; x < x_br; ++x)
+                    {
+                        int x_ = x - x_tl;
+                        dst_row[x].x += short((src_row[x_].x * weight_row[x_]) >> 8);
+                        dst_row[x].y += short((src_row[x_].y * weight_row[x_]) >> 8);
+                        dst_row[x].z += short((src_row[x_].z * weight_row[x_]) >> 8);
+                        dst_weight_row[x] += weight_row[x_];
+                    }
+                }
+                x_tl /= 2; y_tl /= 2;
+                x_br /= 2; y_br /= 2;
+            }
+        }
+    }
+    void blend(cv::Mat &dst, cv::Mat &dst_mask)
+    {
+        using namespace cv::detail;
+        using namespace cv;
+        for (int i = 0; i <= num_bands_; ++i)
+            normalizeUsingWeightMap(dst_band_weights_[i], dst_pyr_laplace_[i]);
+
+        if (can_use_gpu_)
+            restoreImageFromLaplacePyrGpu(dst_pyr_laplace_);
+        else
+            restoreImageFromLaplacePyr(dst_pyr_laplace_);
+
+        dst_ = dst_pyr_laplace_[0];
+        dst_ = dst_(Range(0, dst_roi_final_.height), Range(0, dst_roi_final_.width));
+        dst_mask_ = dst_band_weights_[0] > WEIGHT_EPS;
+        dst_mask_ = dst_mask_(Range(0, dst_roi_final_.height), Range(0, dst_roi_final_.width));
+        dst_pyr_laplace_.clear();
+        dst_band_weights_.clear();
+
+        Blender::blend(dst, dst_mask);
+    }
+
+private:
+    int actual_num_bands_, num_bands_;
+    std::vector<cv::Mat> dst_pyr_laplace_;
+    std::vector<cv::Mat> dst_band_weights_;
+    cv::Rect dst_roi_final_;
+    bool can_use_gpu_;
+    int weight_type_; //CV_32F or CV_16S
+};
+}
 
 /**
 
@@ -289,8 +521,8 @@ bool Map2DRender::renderFrames(std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
                                              (planePts[i].y-curMin.y)*d->lengthPixelInv()));
         }
         cv::Mat transmtx = cv::getPerspectiveTransform(imgPtsCV, destPoints);
-        cv::warpPerspective(img, imgwarped[idx], transmtx, sizes[idx],cv::INTER_LINEAR);
-        cv::warpPerspective(weightImage, maskwarped[idx], transmtx, sizes[idx],cv::INTER_LINEAR);
+        cv::warpPerspective(img, imgwarped[idx], transmtx, sizes[idx],cv::INTER_LINEAR,cv::BORDER_REFLECT);
+        cv::warpPerspective(weightImage, maskwarped[idx], transmtx, sizes[idx],cv::INTER_NEAREST);
         if(0)
         {
             cv::imshow("imgwarped",imgwarped[idx]);
@@ -405,7 +637,7 @@ bool Map2DRender::renderFrames(std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
         using namespace cv;
         using namespace cv::detail;
         Ptr<Blender> blender;
-        int blend_type = Blender::FEATHER;
+        int blend_type = Blender::MULTI_BAND;
         bool try_gpu = false;
         double blend_strength=5;
 
@@ -418,8 +650,9 @@ bool Map2DRender::renderFrames(std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
                 blender = Blender::createDefault(Blender::NO, try_gpu);
             else if (blend_type == Blender::MULTI_BAND)
             {
-                MultiBandBlender* mb = dynamic_cast<MultiBandBlender*>(static_cast<Blender*>(blender));
+                Map2DFusion::MultiBandBlender* mb = new Map2DFusion::MultiBandBlender();
                 mb->setNumBands(static_cast<int>(ceil(log(blend_width)/log(2.)) - 1.));
+                blender=mb;
             }
             else if (blend_type == Blender::FEATHER)
             {
@@ -434,10 +667,10 @@ bool Map2DRender::renderFrames(std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
         {
             if(!imgwarped[i].empty())
             {
-                if(blend_type = Blender::FEATHER)
+                if(blend_type == Blender::FEATHER)
                     imgwarped[i].convertTo(imgwarped[i],CV_16SC3);
                 blender->feed(imgwarped[i], maskwarped[i], cornersImages[i]);
-                if(1)
+                if(0)
                 {
                     cv::imshow("imgwarped",imgwarped[i]);
                     cv::imshow("maskwarped",maskwarped[i]);
@@ -448,7 +681,7 @@ bool Map2DRender::renderFrames(std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
         blender->blend(result, result_mask);
     }
     // 4.apply to the map
-    if(1)
+    if(0)
     {
 
     }

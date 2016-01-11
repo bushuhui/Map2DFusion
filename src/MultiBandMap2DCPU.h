@@ -16,6 +16,7 @@ class MultiBandMap2DCPU:public Map2D,public pi::Thread
         MultiBandMap2DCPUEle():texName(0),Ischanged(false){}
         ~MultiBandMap2DCPUEle();
         static bool normalizeUsingWeightMap(const cv::Mat& weight, cv::Mat& src);
+        static bool mulWeightMap(const cv::Mat& weight, cv::Mat& src);
         cv::Mat blend();
         bool updateTexture();
         std::vector<cv::Mat> pyr_laplace;
