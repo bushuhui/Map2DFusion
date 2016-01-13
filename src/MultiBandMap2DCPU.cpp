@@ -1,6 +1,5 @@
 #include "MultiBandMap2DCPU.h"
 
-#ifdef MULTIBAND
 #include <gui/gl/glHelper.h>
 #include <GL/gl.h>
 #include <base/Svar/Svar.h>
@@ -47,28 +46,83 @@ bool MultiBandMap2DCPU::MultiBandMap2DCPUEle::mulWeightMap(const cv::Mat& weight
     return true;
 }
 
-cv::Mat MultiBandMap2DCPU::MultiBandMap2DCPUEle::blend()
+cv::Mat MultiBandMap2DCPU::MultiBandMap2DCPUEle::blend(const std::vector<SPtr<MultiBandMap2DCPUEle> >& neighbors)
 {
     if(!pyr_laplace.size()) return cv::Mat();
-    else{
+    if(neighbors.size()==9)
+    {
+        //blend with neighbors, this obtains better visualization
+        int flag=0;
+        for(int i=0;i<neighbors.size();i++)
+        {
+            flag<<=1;
+            if(neighbors[i].get()&&neighbors[i].pyr_laplace.size())
+                flag|=1;
+        }
+        switch (flag) {
+        case 0X01FF:
+        {
+            static SPtr<vector<cv::Rect> > lut;
+            if(!lut.get())
+            {
+                lut=SPtr<vector<cv::Rect> >(new vector<cv::Rect>());
+                lut->reserve(18*pyr_laplace.size());
+                for(int i=0;i<pyr_laplace.size();i++)
+                    for(int y=0;y<3;y++)
+                        for(int x=0;x<3;x++)
+                        {
+                            lut->push_back(cv::Rect());
+                        }
+            }
+
+            vector<cv::Mat> pyr_laplaceClone(pyr_laplace.size());
+            for(int i=0;i<pyr_laplace.size();i++)
+            {
+                int borderSize=1<<(pyr_laplace.size()-i-1);
+                int rows=pyr_laplace[i].rows+(borderSize<<1);
+                pyr_laplaceClone[i]=cv::Mat(rows,rows,pyr_laplace[i].type());
+
+                {
+                    SPtr<MultiBandMap2DCPUEle>& ele=neighbors[3*y+x];
+                    pi::ReadMutex lock(ele->mutexData);
+                    cv::Rect      src,dst;
+                    pyr_laplaceClone[i](dst)=ele->pyr_laplace[i](src);
+                }
+            }
+
+            cv::detail::restoreImageFromLaplacePyr(pyr_laplaceClone);
+
+            {
+                cv::Mat result;
+                int borderSize=1<<(pyr_laplace.size()-1);
+                pyr_laplaceClone[0](cv::Rect(borderSize,borderSize,ELE_PIXELS,ELE_PIXELS)).copyTo(result);
+                return  result.setTo(cv::Scalar::all(0),weights[0]==0);
+            }
+        }
+            break;
+        default:
+            break;
+        }
+    }
+
+    {
+        //blend by self
         vector<cv::Mat> pyr_laplaceClone(pyr_laplace.size());
         for(int i=0;i<pyr_laplace.size();i++)
         {
             pyr_laplaceClone[i]=pyr_laplace[i].clone();
-//            normalizeUsingWeightMap(weights[i],pyr_laplaceClone[i]);
         }
 
         cv::detail::restoreImageFromLaplacePyr(pyr_laplaceClone);
 
-        return  pyr_laplaceClone[0];
+        return  pyr_laplaceClone[0].setTo(cv::Scalar::all(0),weights[0]==0);
     }
 }
 
-
 // this is a bad idea, just for test
-bool MultiBandMap2DCPU::MultiBandMap2DCPUEle::updateTexture()
+bool MultiBandMap2DCPU::MultiBandMap2DCPUEle::updateTexture(const std::vector<SPtr<MultiBandMap2DCPUEle> >& neighbors)
 {
-    cv::Mat tmp=blend();
+    cv::Mat tmp=blend(neighbors);
     uint type=0;
     if(tmp.empty()) return false;
     else if(tmp.type()==CV_8UC3)
@@ -154,7 +208,8 @@ bool MultiBandMap2DCPU::MultiBandMap2DCPUData::prepare(SPtr<MultiBandMap2DCPUPre
 MultiBandMap2DCPU::MultiBandMap2DCPU(bool thread)
     :alpha(svar.GetInt("Map2D.Alpha",0)),
      _valid(false),_thread(thread),
-     _bandNum(svar.GetInt("Map2D.BandNumber",5))
+     _bandNum(svar.GetInt("MultiBandMap2DCPU.BandNumber",5)),
+     _highQualityShow(svar.GetInt("MultiBandMap2DCPU.HighQualityShow",0))
 {
     _bandNum=min(_bandNum, static_cast<int>(ceil(log(ELE_PIXELS) / log(2.0))));
 }
@@ -304,13 +359,12 @@ bool MultiBandMap2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
         for(int i=0;i<h;i++)
             for(int j=0;j<w;j++)
             {
-//                float dis=(i-y_center)*(i-y_center)+(j-x_center)*(j-x_center);
-//                dis=1-sqrt(dis)/dis_max;
-//                if(0==weightType)
-//                    *p=dis;
-//                else *p=dis*dis;
-//                if(*p<=1e-5) *p=1e-5;
-                *p=1.;
+                float dis=(i-y_center)*(i-y_center)+(j-x_center)*(j-x_center);
+                dis=1-sqrt(dis)/dis_max;
+                if(0==weightType)
+                    *p=dis;
+                else *p=dis*dis;
+                if(*p<=1e-5) *p=1e-5;
                 p++;
             }
         weight_src=weightImage.clone();
@@ -355,39 +409,15 @@ bool MultiBandMap2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
     }
 
     // 4. blender dst to eles
-    pi::timer.enter("Apply");
     std::vector<cv::Mat> pyr_laplace;
     cv::detail::createLaplacePyr(image_warped, _bandNum, pyr_laplace);
 
     std::vector<cv::Mat> pyr_weights(_bandNum+1);
-//    cv::copyMakeBorder(image_warped,image_warped,0,0,0,0,cv::BORDER_REFLECT);
-//    cv::copyMakeBorder(weight_warped, pyr_weights[0], 0, 0, 0, 0,cv::BORDER_CONSTANT);
     pyr_weights[0]=weight_warped;
     for (int i = 0; i < _bandNum; ++i)
         cv::pyrDown(pyr_weights[i], pyr_weights[i + 1]);
 
-    if(svar.GetInt("ShowLaplaceResult",0))
-    {
-        stringstream name;
-        for(int i=0;i<=0;i++)
-        {
-            name<<i;
-            cv::imshow("LaplacePyr"+name.str(),pyr_laplace[i]);
-//            cv::imshow("WeightPyr"+name.str(),pyr_weights[i]);
-        }
-        vector<cv::Mat> pyr_laplaceClone(pyr_laplace.size());
-        for(int i=0;i<pyr_laplace.size();i++)
-        {
-            pyr_laplaceClone[i]=pyr_laplace[i].clone();
-            MultiBandMap2DCPUEle::mulWeightMap(pyr_weights[i],pyr_laplaceClone[i]);
-            MultiBandMap2DCPUEle::normalizeUsingWeightMap(pyr_weights[i],pyr_laplaceClone[i]);
-        }
-
-        cv::detail::restoreImageFromLaplacePyr(pyr_laplaceClone);
-
-        cv::imshow("imgRestore",pyr_laplaceClone[0]);
-    }
-
+    pi::timer.enter("MultiBandMap2DCPU::Apply");
     std::vector<SPtr<MultiBandMap2DCPUEle> > dataCopy=d->data();
     for(int x=xminInt;x<xmaxInt;x++)
         for(int y=yminInt;y<ymaxInt;y++)
@@ -413,11 +443,10 @@ bool MultiBandMap2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
                     {
                         //fresh
                         cv::Rect rect(width*(x-xminInt),height*(y-yminInt),width,height);
-                        ele->pyr_laplace[i]=cv::Mat::zeros(height,width,pyr_laplace[i].type());
-                        ele->weights[i]    =cv::Mat::zeros(height,width,pyr_weights[i].type());
-//                        pyr_laplace[i](rect).copyTo(ele->pyr_laplace[i]);
-//                        pyr_weights[i](rect).copyTo(ele->weights[i]);
+                        pyr_laplace[i](rect).copyTo(ele->pyr_laplace[i]);
+                        pyr_weights[i](rect).copyTo(ele->weights[i]);
                     }
+                    else
                     {
                         if(pyr_laplace[i].type()==CV_32FC3)
                         {
@@ -433,8 +462,11 @@ bool MultiBandMap2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
                             for(int eleY=0;eleY<height;eleY++,srcL+=skip,srcW+=skip)
                                 for(int eleX=0;eleX<width;eleX++,srcL++,dstL++,srcW++,dstW++)
                                 {
-                                    *dstL=*dstL+(*srcL)*(*srcW);
-                                    *dstW+=*srcW;
+                                    if((*srcW)>=(*dstW))
+                                    {
+                                        *dstL=(*srcL);
+                                        *dstW=*srcW;
+                                    }
                                 }
                         }
                         else if(pyr_laplace[i].type()==CV_8UC3)
@@ -451,8 +483,12 @@ bool MultiBandMap2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
                             for(int eleY=0;eleY<height;eleY++,srcL+=skip,srcW+=skip)
                                 for(int eleX=0;eleX<width;eleX++,srcL++,dstL++,srcW++,dstW++)
                                 {
-                                    *dstL=*dstL+(*srcL)*(*srcW);
-                                    *dstW+=*srcW;
+
+                                    *dstL=(*srcL);
+                                    *dstW=*srcW;
+//                                    *dstL=*dstL+(*srcL)*(*srcW);
+//                                    *dstW+=*srcW;
+
 //                                    if(*srcW>=*dstW)
 //                                    {
 //                                    *dstL=((*dstL)*(*dstW)+(*srcL)*(*srcW))*(1./((*dstW)+(*srcW)));
@@ -466,7 +502,7 @@ bool MultiBandMap2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
                 ele->Ischanged=true;
             }
         }
-    pi::timer.leave("Apply");
+    pi::timer.leave("MultiBandMap2DCPU::Apply");
 
     return true;
 }
@@ -630,7 +666,12 @@ void MultiBandMap2DCPU::draw()
                     pi::ReadMutex lock(ele->mutexData);
                     if(!(ele->pyr_laplace.size()&&ele->weights.size()
                          &&ele->pyr_laplace.size()==ele->weights.size())) continue;
-                    if(ele->Ischanged) ele->updateTexture();
+                    if(ele->Ischanged)
+                    {
+                        pi::timer.enter("MultiBandMap2DCPU::updateTexture");
+                        ele->updateTexture();
+                        pi::timer.leave("MultiBandMap2DCPU::updateTexture");
+                    }
                 }
                 if(ele->texName)
                 {
@@ -690,4 +731,3 @@ bool MultiBandMap2DCPU::save(const std::string& filename)
 //    cv::imwrite(filename,result);
     return true;
 }
-#endif

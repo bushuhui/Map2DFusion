@@ -23,6 +23,11 @@ Win3D::Win3D(QWidget *parent)
     infos.push_back(&info);
 }
 
+Win3D::~Win3D()
+{
+    clear();
+}
+
 void Win3D::keyPressEvent(QKeyEvent *e)
 {
     if( event_handle != NULL ) {

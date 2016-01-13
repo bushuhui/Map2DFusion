@@ -34,6 +34,8 @@ class Win3D: public QGLViewer
 public:
     Win3D(QWidget *parent=NULL);
 
+    virtual ~Win3D();
+
     void insert(const GL_Object& obj)   {pi::ScopedMutex lock(m_mutex);scence.insert(obj);}
     void insert(const GL_ObjectPtr& obj){pi::ScopedMutex lock(m_mutex);scence.insert(obj);}
     void insert(GL_Object* obj){pi::ScopedMutex lock(m_mutex);scence.insert(GL_ObjectPtr(obj));}

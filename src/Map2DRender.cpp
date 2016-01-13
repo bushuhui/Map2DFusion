@@ -22,7 +22,8 @@ bool mulWeightMap(const cv::Mat& weight, cv::Mat& src)
     pi::Point3_<int16_t>* srcP=(pi::Point3_<int16_t>*)src.data;
     float*    weightP=(float*)weight.data;
     for(float* Pend=weightP+weight.cols*weight.rows;weightP!=Pend;weightP++,srcP++)
-        *srcP=(*srcP)*(*weightP);
+//        *srcP=(*srcP)*(*weightP);
+        if(!(*weightP)) (*srcP)=pi::Point3_<int16_t>(0,0,0);
     return true;
 }
 
@@ -155,12 +156,22 @@ public:
             {
                 pyr_laplaceClone[i]=src_pyr_laplace[i].clone();
                 mulWeightMap(weight_pyr_gauss[i],pyr_laplaceClone[i]);
-                normalizeUsingWeightMap(weight_pyr_gauss[i],pyr_laplaceClone[i]);
+//                normalizeUsingWeightMap(weight_pyr_gauss[i],pyr_laplaceClone[i]);
+                {
+                    cv::Mat result;pyr_laplaceClone[i].convertTo(result,CV_8U);
+                    cv::imshow("pyrImage",result);
+                    cv::imshow("pyrWeight",weight_pyr_gauss[i]);
+                    cv::waitKey(0);
+                }
             }
             restoreImageFromLaplacePyr(pyr_laplaceClone);
             cv::Mat result=pyr_laplaceClone[0];
             result.convertTo(result,CV_8U);
+            result.setTo(cv::Scalar::all(0),weight_pyr_gauss[0]==0);
+            cv::imshow("imgWithBorder",img_with_border);
+            cv::imshow("weight",weight_pyr_gauss[0]);
             cv::imshow("restoreImage",result);
+            cv::waitKey(0);
         }
         // Add weighted layer of the source image to the final Laplacian pyramid layer
         if(weight_type_ == CV_32F)
@@ -178,10 +189,20 @@ public:
                     for (int x = x_tl; x < x_br; ++x)
                     {
                         int x_ = x - x_tl;
+#if 1
+                        if(weight_row[x_]>=dst_weight_row[x])
+                        {
+                            dst_weight_row[x]=weight_row[x_];
+                            dst_row[x]=src_row[x_];
+//                            dst_row[x]=(dst_row[x]*dst_weight_row[x]+src_row[x_]*weight_row[x_])*(1./(dst_weight_row[x]+weight_row[x_]+1e-5));
+                        }
+#else
                         dst_row[x].x += static_cast<short>(src_row[x_].x * weight_row[x_]);
                         dst_row[x].y += static_cast<short>(src_row[x_].y * weight_row[x_]);
                         dst_row[x].z += static_cast<short>(src_row[x_].z * weight_row[x_]);
                         dst_weight_row[x] += weight_row[x_];
+                        should_normalize=true;
+#endif
                     }
                 }
                 x_tl /= 2; y_tl /= 2;
@@ -218,6 +239,8 @@ public:
     {
         using namespace cv::detail;
         using namespace cv;
+
+        if(should_normalize)
         for (int i = 0; i <= num_bands_; ++i)
             normalizeUsingWeightMap(dst_band_weights_[i], dst_pyr_laplace_[i]);
 
@@ -226,12 +249,31 @@ public:
         else
             restoreImageFromLaplacePyr(dst_pyr_laplace_);
 
+
         dst_ = dst_pyr_laplace_[0];
-        dst_ = dst_(Range(0, dst_roi_final_.height), Range(0, dst_roi_final_.width));
         dst_mask_ = dst_band_weights_[0] > WEIGHT_EPS;
+
+//        {
+//            cv::Mat result=dst_;
+//            result.convertTo(result,CV_8U);
+//            result.setTo(Scalar::all(0), dst_mask_ == 0);
+//            cv::imshow("dst_",result);
+//            cv::imshow("dst_mask_",dst_mask_);
+//            cv::waitKey(0);
+//        }
+
+        dst_ = dst_(Range(0, dst_roi_final_.height), Range(0, dst_roi_final_.width));
         dst_mask_ = dst_mask_(Range(0, dst_roi_final_.height), Range(0, dst_roi_final_.width));
         dst_pyr_laplace_.clear();
         dst_band_weights_.clear();
+
+//        {
+//            cv::Mat result=dst_;
+//            result.convertTo(result,CV_8U);
+//            cv::imshow("dst_",result);
+//            cv::imshow("dst_mask_",dst_mask_);
+//            cv::waitKey(0);
+//        }
 
         Blender::blend(dst, dst_mask);
     }
@@ -241,7 +283,7 @@ private:
     std::vector<cv::Mat> dst_pyr_laplace_;
     std::vector<cv::Mat> dst_band_weights_;
     cv::Rect dst_roi_final_;
-    bool can_use_gpu_;
+    bool can_use_gpu_,should_normalize;
     int weight_type_; //CV_32F or CV_16S
 };
 }
@@ -445,7 +487,7 @@ bool Map2DRender::renderFrames(std::deque<std::pair<cv::Mat,pi::SE3d> >& frames)
             int w=p->_camera.w;
             int h=p->_camera.h;
             weightImage=cv::Mat(h,w,CV_8UC1,cv::Scalar(255));
-            if(0)
+            if(1)
             {
                 pi::byte *p=(weightImage.data);
                 float x_center=w*0.5;

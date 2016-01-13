@@ -56,7 +56,7 @@ class Map2D:public pi::gl::GL_Object
 {
 
 public:
-    enum Map2DType{TypeCPU=0,TypeRender=1,NoType=2,TypeGPU=3,TypeMultiBandCPU=4};
+    enum Map2DType{NoType=0,TypeCPU=1,TypeGPU=2,TypeMultiBandCPU=3,TypeRender=4};
     static SPtr<Map2D> create(int type=TypeCPU,bool thread=true);
 
     virtual ~Map2D(){}

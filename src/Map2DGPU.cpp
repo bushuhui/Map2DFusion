@@ -14,7 +14,6 @@
 #include "Map2DGPU.h"
 #include "UtilGPU.cuh"
 
-
 using namespace std;
 
 cudaGraphicsResource* cuda_pbo_resource=NULL;

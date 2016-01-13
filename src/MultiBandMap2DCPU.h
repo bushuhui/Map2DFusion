@@ -1,11 +1,7 @@
-#define MULTIBAND
-
-#ifdef MULTIBAND
 #ifndef MultiBandMap2DCPU_H
 #define MultiBandMap2DCPU_H
 #include "Map2D.h"
 #include <base/system/thread/ThreadBase.h>
-
 
 class MultiBandMap2DCPU:public Map2D,public pi::Thread
 {
@@ -15,12 +11,18 @@ class MultiBandMap2DCPU:public Map2D,public pi::Thread
     {
         MultiBandMap2DCPUEle():texName(0),Ischanged(false){}
         ~MultiBandMap2DCPUEle();
+
         static bool normalizeUsingWeightMap(const cv::Mat& weight, cv::Mat& src);
         static bool mulWeightMap(const cv::Mat& weight, cv::Mat& src);
-        cv::Mat blend();
-        bool updateTexture();
+
+        cv::Mat blend(const std::vector<SPtr<MultiBandMap2DCPUEle> >& neighbors
+                      =std::vector<SPtr<MultiBandMap2DCPUEle> >());
+        bool updateTexture(const std::vector<SPtr<MultiBandMap2DCPUEle> >& neighbors
+                =std::vector<SPtr<MultiBandMap2DCPUEle> >());
+
         std::vector<cv::Mat> pyr_laplace;
         std::vector<cv::Mat> weights;
+
         uint    texName;
         bool    Ischanged;
         pi::MutexRW mutexData;
@@ -105,7 +107,6 @@ private:
 
     bool                              _valid,_thread,_changed;
     cv::Mat                           weightImage;
-    int&                              alpha,_bandNum;
+    int                               &alpha,_bandNum,&_highQualityShow;
 };
 #endif // MULTIBANDMap2DCPU_H
-#endif
