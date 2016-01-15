@@ -126,7 +126,8 @@ public:
 
         if(!frames.size()) return -4;
 
-        map=Map2D::create(svar.GetInt("Map2D.Type",Map2D::TypeGPU));
+        map=Map2D::create(svar.GetInt("Map2D.Type",Map2D::TypeGPU),
+                          svar.GetInt("Map2D.Thread",true));
         if(!map.get())
         {
             cerr<<"No map2d created!\n";
@@ -156,7 +157,7 @@ public:
             while(!needStop) sleep(20);
         }
 
-        if(svar.GetInt("AutoFeedFrames"))
+        if(svar.GetInt("AutoFeedFrames",1))
         {
             pi::Rate rate(100);
             while(!shouldStop())
@@ -184,6 +185,7 @@ public:
         else if(act=="TestMap2D"||act=="Default") testMap2D();
         else cout<<"No act "<<act<<"!\n";
     }
+
     string        datapath;
     pi::TicTac    tictac;
     SPtr<pi::gl::Win3D> win3d;
@@ -197,10 +199,10 @@ int main(int argc,char** argv)
 
     if(svar.GetInt("Win3D.Enable",0))
     {
-    QApplication app(argc,argv);
-    TestSystem sys;
-    sys.start();
-    return app.exec();
+        QApplication app(argc,argv);
+        TestSystem sys;
+        sys.start();
+        return app.exec();
     }
     else
     {

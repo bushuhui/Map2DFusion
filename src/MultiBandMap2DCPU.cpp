@@ -56,37 +56,35 @@ cv::Mat MultiBandMap2DCPU::MultiBandMap2DCPUEle::blend(const std::vector<SPtr<Mu
         for(int i=0;i<neighbors.size();i++)
         {
             flag<<=1;
-            if(neighbors[i].get()&&neighbors[i].pyr_laplace.size())
+            if(neighbors[i].get()&&neighbors[i]->pyr_laplace.size())
                 flag|=1;
         }
         switch (flag) {
         case 0X01FF:
         {
-            static SPtr<vector<cv::Rect> > lut;
-            if(!lut.get())
-            {
-                lut=SPtr<vector<cv::Rect> >(new vector<cv::Rect>());
-                lut->reserve(18*pyr_laplace.size());
-                for(int i=0;i<pyr_laplace.size();i++)
-                    for(int y=0;y<3;y++)
-                        for(int x=0;x<3;x++)
-                        {
-                            lut->push_back(cv::Rect());
-                        }
-            }
-
             vector<cv::Mat> pyr_laplaceClone(pyr_laplace.size());
             for(int i=0;i<pyr_laplace.size();i++)
             {
                 int borderSize=1<<(pyr_laplace.size()-i-1);
-                int rows=pyr_laplace[i].rows+(borderSize<<1);
-                pyr_laplaceClone[i]=cv::Mat(rows,rows,pyr_laplace[i].type());
+                int srcrows=pyr_laplace[i].rows;
+                int dstrows=srcrows+(borderSize<<1);
+                pyr_laplaceClone[i]=cv::Mat(dstrows,dstrows,pyr_laplace[i].type());
 
+                for(int y=0;y<3;y++)
+                    for(int x=0;x<3;x++)
                 {
-                    SPtr<MultiBandMap2DCPUEle>& ele=neighbors[3*y+x];
+                    const SPtr<MultiBandMap2DCPUEle>& ele=neighbors[3*y+x];
                     pi::ReadMutex lock(ele->mutexData);
+                    if(ele->pyr_laplace[i].empty())
+                        continue;
                     cv::Rect      src,dst;
-                    pyr_laplaceClone[i](dst)=ele->pyr_laplace[i](src);
+                    src.width =dst.width =(x==1)?srcrows:borderSize;
+                    src.height=dst.height=(y==1)?srcrows:borderSize;
+                    src.x=(x==0)?(srcrows-borderSize):0;
+                    src.y=(y==0)?(srcrows-borderSize):0;
+                    dst.x=(x==0)?0:((x==1)?borderSize:(dstrows-borderSize));
+                    dst.y=(y==0)?0:((y==1)?borderSize:(dstrows-borderSize));
+                    ele->pyr_laplace[i](src).copyTo(pyr_laplaceClone[i](dst));
                 }
             }
 
@@ -125,8 +123,11 @@ bool MultiBandMap2DCPU::MultiBandMap2DCPUEle::updateTexture(const std::vector<SP
     cv::Mat tmp=blend(neighbors);
     uint type=0;
     if(tmp.empty()) return false;
-    else if(tmp.type()==CV_8UC3)
+    else if(tmp.type()==CV_16SC3)
+    {
+        tmp.convertTo(tmp,CV_8UC3);
         type=GL_UNSIGNED_BYTE;
+    }
     else if(tmp.type()==CV_32FC3)
         type=GL_FLOAT;
     if(!type) return false;
@@ -209,7 +210,7 @@ MultiBandMap2DCPU::MultiBandMap2DCPU(bool thread)
     :alpha(svar.GetInt("Map2D.Alpha",0)),
      _valid(false),_thread(thread),
      _bandNum(svar.GetInt("MultiBandMap2DCPU.BandNumber",5)),
-     _highQualityShow(svar.GetInt("MultiBandMap2DCPU.HighQualityShow",0))
+     _highQualityShow(svar.GetInt("MultiBandMap2DCPU.HighQualityShow",1))
 {
     _bandNum=min(_bandNum, static_cast<int>(ceil(log(ELE_PIXELS) / log(2.0))));
 }
@@ -392,10 +393,10 @@ bool MultiBandMap2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
     cv::Mat transmtx = cv::getPerspectiveTransform(imgPtsCV, destPoints);
 
     cv::Mat img_src;
-    if(svar.GetInt("MultiBandMap2DCPU.ForceFloat",1))
+    if(svar.GetInt("MultiBandMap2DCPU.ForceFloat",0))
         frame.first.convertTo(img_src,CV_32FC3,1./255.);
     else
-        img_src=frame.first;
+        frame.first.convertTo(img_src,CV_16SC3);
 
     cv::Mat weight_warped((ymaxInt-yminInt)*ELE_PIXELS,(xmaxInt-xminInt)*ELE_PIXELS,CV_32FC1);
     cv::Mat image_warped((ymaxInt-yminInt)*ELE_PIXELS,(xmaxInt-xminInt)*ELE_PIXELS,img_src.type());
@@ -469,31 +470,25 @@ bool MultiBandMap2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
                                     }
                                 }
                         }
-                        else if(pyr_laplace[i].type()==CV_8UC3)
+                        else if(pyr_laplace[i].type()==CV_16SC3)
                         {
                             int org =(x-xminInt)*width+(y-yminInt)*height*pyr_laplace[i].cols;
                             int skip=pyr_laplace[i].cols-ele->pyr_laplace[i].cols;
 
-                            pi::Point3ub *srcL=((pi::Point3ub*)pyr_laplace[i].data)+org;
+                            pi::Point3_<short> *srcL=((pi::Point3_<short>*)pyr_laplace[i].data)+org;
                             float       *srcW=((float*)pyr_weights[i].data)+org;
 
-                            pi::Point3ub *dstL=(pi::Point3ub*)ele->pyr_laplace[i].data;
+                            pi::Point3_<short> *dstL=(pi::Point3_<short>*)ele->pyr_laplace[i].data;
                             float       *dstW=(float*)ele->weights[i].data;
 
                             for(int eleY=0;eleY<height;eleY++,srcL+=skip,srcW+=skip)
                                 for(int eleX=0;eleX<width;eleX++,srcL++,dstL++,srcW++,dstW++)
                                 {
-
-                                    *dstL=(*srcL);
-                                    *dstW=*srcW;
-//                                    *dstL=*dstL+(*srcL)*(*srcW);
-//                                    *dstW+=*srcW;
-
-//                                    if(*srcW>=*dstW)
-//                                    {
-//                                    *dstL=((*dstL)*(*dstW)+(*srcL)*(*srcW))*(1./((*dstW)+(*srcW)));
-//                                    *dstW=*srcW;
-//                                    }
+                                    if((*srcW)>=(*dstW))
+                                    {
+                                        *dstL=(*srcL);
+                                        *dstW=*srcW;
+                                    }
                                 }
                         }
                     }
@@ -669,7 +664,21 @@ void MultiBandMap2DCPU::draw()
                     if(ele->Ischanged)
                     {
                         pi::timer.enter("MultiBandMap2DCPU::updateTexture");
-                        ele->updateTexture();
+                        if(_highQualityShow)
+                        {
+                            vector<SPtr<MultiBandMap2DCPUEle> > neighbors;
+                            neighbors.reserve(9);
+                            for(int yi=y-1;yi<=y+1;yi++)
+                                for(int xi=x-1;xi<=x+1;xi++)
+                                {
+                                    if(yi<0||yi>=hCopy||xi<0||xi>=wCopy)
+                                        neighbors.push_back(SPtr<MultiBandMap2DCPUEle>());
+                                    else neighbors.push_back(dataCopy[yi*wCopy+xi]);
+                                }
+                            ele->updateTexture(neighbors);
+                        }
+                        else
+                            ele->updateTexture();
                         pi::timer.leave("MultiBandMap2DCPU::updateTexture");
                     }
                 }
@@ -691,43 +700,64 @@ void MultiBandMap2DCPU::draw()
 
 bool MultiBandMap2DCPU::save(const std::string& filename)
 {
-//    // determin minmax
-//    SPtr<MultiBandMap2DCPUPrepare> p;
-//    SPtr<MultiBandMap2DCPUData>    d;
-//    {
-//        pi::ReadMutex lock(mutex);
-//        p=prepared;d=data;
-//    }
-//    if(d->w()==0||d->h()==0) return false;
+    // determin minmax
+    SPtr<MultiBandMap2DCPUPrepare> p;
+    SPtr<MultiBandMap2DCPUData>    d;
+    {
+        pi::ReadMutex lock(mutex);
+        p=prepared;d=data;
+    }
+    if(d->w()==0||d->h()==0) return false;
 
-//    pi::Point2i minInt(1e6,1e6),maxInt(-1e6,-1e6);
-//    for(int x=0;x<d->w();x++)
-//        for(int y=0;y<d->h();y++)
-//        {
-//            SPtr<MultiBandMap2DCPUEle> ele=d->data()[x+y*d->w()];
-//            if(!ele.get()) continue;
-//            {
-//                pi::ReadMutex lock(ele->mutexData);
-//                if(ele->img.empty()) continue;
-//            }
-//            minInt.x=min(minInt.x,x); minInt.y=min(minInt.y,y);
-//            maxInt.x=max(maxInt.x,x); maxInt.y=max(maxInt.y,y);
-//        }
+    pi::Point2i minInt(1e6,1e6),maxInt(-1e6,-1e6);
+    for(int x=0;x<d->w();x++)
+        for(int y=0;y<d->h();y++)
+        {
+            SPtr<MultiBandMap2DCPUEle> ele=d->data()[x+y*d->w()];
+            if(!ele.get()) continue;
+            {
+                pi::ReadMutex lock(ele->mutexData);
+                if(!ele->pyr_laplace.size()) continue;
+            }
+            minInt.x=min(minInt.x,x); minInt.y=min(minInt.y,y);
+            maxInt.x=max(maxInt.x,x); maxInt.y=max(maxInt.y,y);
+        }
 
-//    maxInt=maxInt+pi::Point2i(1,1);
-//    pi::Point2i wh=maxInt-minInt;
-//    cv::Mat result(wh.y*ELE_PIXELS,wh.x*ELE_PIXELS,CV_8UC4);
-//    for(int x=minInt.x;x<maxInt.x;x++)
-//        for(int y=minInt.y;y<maxInt.y;y++)
-//        {
-//            SPtr<MultiBandMap2DCPUEle> ele=d->data()[x+y*d->w()];
-//            if(!ele.get()) continue;
-//            {
-//                pi::ReadMutex lock(ele->mutexData);
-//                ele->img.copyTo(result(cv::Rect(ELE_PIXELS*(x-minInt.x),ELE_PIXELS*(y-minInt.y),ELE_PIXELS,ELE_PIXELS)));
-//            }
-//        }
+    maxInt=maxInt+pi::Point2i(1,1);
+    pi::Point2i wh=maxInt-minInt;
+    vector<cv::Mat> pyr_laplace(_bandNum+1);
+    vector<cv::Mat> pyr_weights(_bandNum+1);
+    for(int i=0;i<=0;i++)
+        pyr_weights[i]=cv::Mat::zeros(wh.y*ELE_PIXELS,wh.x*ELE_PIXELS,CV_32FC1);
 
-//    cv::imwrite(filename,result);
+    for(int x=minInt.x;x<maxInt.x;x++)
+        for(int y=minInt.y;y<maxInt.y;y++)
+        {
+            SPtr<MultiBandMap2DCPUEle> ele=d->data()[x+y*d->w()];
+            if(!ele.get()) continue;
+            {
+                pi::ReadMutex lock(ele->mutexData);
+                if(!ele->pyr_laplace.size()) continue;
+                int width=ELE_PIXELS,height=ELE_PIXELS;
+
+                for (int i = 0; i <= _bandNum; ++i)
+                {
+                    cv::Rect rect(width*(x-minInt.x),height*(y-minInt.y),width,height);
+                    if(pyr_laplace[i].empty())
+                        pyr_laplace[i]=cv::Mat::zeros(wh.y*height,wh.x*width,ele->pyr_laplace[i].type());
+                    ele->pyr_laplace[i].copyTo(pyr_laplace[i](rect));
+                    if(i==0)
+                        ele->weights[i].copyTo(pyr_weights[i](rect));
+                    height>>=1;width>>=1;
+                }
+            }
+        }
+
+    cv::detail::restoreImageFromLaplacePyr(pyr_laplace);
+
+    cv::Mat result=pyr_laplace[0];
+    if(result.type()==CV_16SC3) result.convertTo(result,CV_8UC3);
+    result.setTo(cv::Scalar::all(0),pyr_weights[0]==0);
+    cv::imwrite(filename,result);
     return true;
 }
