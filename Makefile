@@ -18,10 +18,10 @@ export LIB_MAKE_TYPE    = shared # static #
 
 export LIB_PI_TOP	= $(TOPDIR)/PIL
 
-.PHONY: all apps libs lua levmar pi_base pi_lua pi_network pi_hardware pi_gui clean_tmp clean
+.PHONY: all apps libs lua opmapcontrol pi_base pi_lua pi_network pi_hardware pi_gui clean_tmp clean
 all :libs apps
 
-libs:lua  pi_base pi_lua pi_hardware pi_gui
+libs:lua opmapcontrol pi_base pi_lua pi_hardware pi_gui 
 
 apps: libs
 	$(MAKE) -C src
@@ -29,8 +29,8 @@ apps: libs
 lua:
 	$(MAKE) -C PIL/Thirdparty/lua-5.1.5
 
-levmar:
-	$(MAKE) -C PIL/Thirdparty/levmar-2.6
+opmapcontrol:
+	$(MAKE) -C PIL/Thirdparty/opmapcontrol
 
 pi_base:
 	$(MAKE) -C PIL/src/base

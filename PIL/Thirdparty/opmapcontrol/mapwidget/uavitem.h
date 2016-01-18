@@ -53,13 +53,13 @@ class OPMapWidget;
 *
 * @class UAVItem uavitem.h "mapwidget/uavitem.h"
 */
-class UAVItem:public QObject,public QGraphicsItem
+class UAVItem : public QObject,public QGraphicsItem
 {
     Q_OBJECT
     Q_INTERFACES(QGraphicsItem)
 
 public:
-    enum { Type = UserType + 2 };
+    enum { Type = UserType + 3 };
 
     UAVItem(MapGraphicItem* map,OPMapWidget* parent, QString uavPic=QString::fromUtf8(":/uavs/images/mapquad.png"));
     ~UAVItem();

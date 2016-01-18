@@ -16,10 +16,14 @@
         <file>images/ata.svg</file>
         <file>images/ata.png</file>
         <file>images/ata2.png</file>
+        <file>images/guidedTarget.png</file>
     </qresource>
     <qresource prefix="/uavs">
         <file>images/airplanepip.png</file>
         <file>images/EasystarBlue.png</file>
         <file>images/mapquad.png</file>
+    </qresource>
+    <qresource prefix="/images">
+        <file>images/pis_about.png</file>
     </qresource>
 </RCC>

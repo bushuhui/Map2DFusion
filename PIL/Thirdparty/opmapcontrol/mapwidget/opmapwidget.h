@@ -29,6 +29,7 @@
 #ifndef OPMAPWIDGET_H
 #define OPMAPWIDGET_H
 
+#include <stdint.h>
 
 #include <QObject>
 #include <QtOpenGL/QGLWidget>
@@ -48,12 +49,15 @@
 #include "../core/maptype.h"
 #include "../core/languagetype.h"
 #include "../core/diagnostics.h"
+
 #include "omapconfiguration.h"
 #include "waypointitem.h"
 #include "uavitem.h"
 #include "gpsitem.h"
 #include "homeitem.h"
 #include "gcsitem.h"
+#include "guidedTargetItem.h"
+#include "distanceMeasureItem.h"
 #include "waypointlineitem.h"
 #include "mapripper.h"
 #include "uavtrailtype.h"
@@ -64,6 +68,10 @@ class UAVItem;
 class GPSItem;
 class HomeItem;
 class GCSItem;
+class WayPointItem;
+class WaypointLineItem;
+class GuidedTargetItem;
+class DistanceMeasureItem;
 
 /**
     * @brief Collection of static functions to help dealing with various enums used
@@ -289,6 +297,7 @@ public:
     //  void SetMouseWheelZoomTypeByStr(const QString &value){map->core->SetMouseWheelZoomType(internals::MouseWheelZoomType::TypeByStr(value));}
     //  QString GetMouseWheelZoomTypeStr(){return map->GetMouseWheelZoomTypeStr();}
 
+
     internals::RectLatLng SelectedArea() const {
         return  map->selectedArea;
     }
@@ -472,14 +481,25 @@ public:
      */
     void WPRenumber(WayPointItem* item,int const& newnumber);
 
+
+    // waypoint lines
+    void addWaypointLine(WayPointItem *wp1, WayPointItem *wp2, QColor color=QColor(Qt::green));
+    void delWaypointLine(WayPointItem *wp1, WayPointItem *wp2);
+    void delWaypointLines(WayPointItem *wp);
+    void delAllWaypointLines(void);
+
+
     void SetShowCompass(bool const& value);
 
     // FIXME XXX Move to protected namespace
-    UAVItem* UAV;
-    QMap<int, QGraphicsItemGroup*> waypointLines;
-    GPSItem* GPS;
-    HomeItem* Home;
-    GCSItem* GCS;
+    UAVItem                             *UAV;
+    GPSItem                             *GPS;
+    HomeItem                            *Home;
+    GCSItem                             *GCS;
+    GuidedTargetItem                    *GTI;
+    DistanceMeasureItem                 *DMI;
+
+    QMap<int, QGraphicsItemGroup*>      waypointLines;
     // END OF FIXME XXX
 
     UAVItem* AddUAV(int id);
@@ -499,27 +519,65 @@ public:
     void SetShowGCS(const bool &value);
     bool ShowGCS() const { return showgcs; }
 
+    void SetShowGuidedTarget(const bool &value);
+    bool ShowGuidedTarget() const { return showGuidedTarget; }
+
+    void SetShowDistanceMeasure(const bool &value);
+    bool ShowDistanceMeasure() const { return showDMI; }
+
+
+    // set map overlay rectange
+    void SetMapOverlayRect(internals::RectLatLng const& value){
+        map->m_mapOverlayRect = value;
+        //map->update();
+    }
+
+    internals::RectLatLng GetMapOverlayRect() const {
+        return  map->m_mapOverlayRect;
+    }
+
+    bool SetMapOverlay(QImage &layer){
+        if(!layer.isNull()){
+            map->m_mapOverlayImg = layer;
+            return true;
+        }
+        return false;
+    }
+
+    void SetShowlayer(bool const& value, int alpha = 25) {
+        map->m_mapOverlayShow = value;
+        map->m_mapOverlayAlpha = alpha;
+    }
+
 
     void SetShowDiagnostics(bool const& value);
 
-    QMap<int, UAVItem*> UAVS;
+    QMap<int, UAVItem*>             UAVS;
+
+    typedef QList<WaypointLineItem*>    WaypointLinesType;
+    WaypointLinesType                   m_waypointLines;
+
+    // Try this below
+    MapGraphicItem* GetMapItem(){return map;}
 
 protected:
-    internals::Core *core;
-    QGraphicsScene mscene;
-    bool useOpenGL;
-    GeoCoderStatusCode x;
-    MapType y;
-    core::AccessMode xx;
-    internals::PointLatLng currentmouseposition;
-    bool followmouse;
-    QGraphicsSvgItem *compass;
-    bool showuav;
-    bool showhome;
-    bool showgcs;
-    QTimer *diagTimer;
-    bool showDiag;
-    QGraphicsTextItem *diagGraphItem;
+    internals::Core                 *core;
+    QGraphicsScene                  mscene;
+    bool                            useOpenGL;
+    QGraphicsSvgItem                *compass;
+
+    internals::PointLatLng          currentmouseposition;
+    bool                            followmouse;
+
+    bool                            showuav;
+    bool                            showhome;
+    bool                            showgcs;
+    bool                            showGuidedTarget;
+    bool                            showDMI;
+
+    QTimer                          *diagTimer;
+    bool                            showDiag;
+    QGraphicsTextItem               *diagGraphItem;
 
 private slots:
     void diagRefresh();
@@ -527,6 +585,7 @@ private slots:
 
 protected:
     MapGraphicItem *map;
+
     void resizeEvent(QResizeEvent *event);
     void showEvent ( QShowEvent * event );
     void closeEvent(QCloseEvent *event);
@@ -550,7 +609,7 @@ signals:
     /**
      * @brief Notify connected widgets about new map zoom
      */
-    void zoomChanged(double zoomt,double zoom, double zoomd);
+    void zoomChanged(double zoomt, double zoom, double zoomd);
     void zoomChanged(int newZoom);
 
     /**
@@ -591,6 +650,7 @@ signals:
      * @param number number of the deleted WayPoint
      */
     void WPDeleted(int const& number);
+
 
     /**
      * @brief Fires When a WayPoint is Reached

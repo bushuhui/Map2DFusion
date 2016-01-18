@@ -30,34 +30,40 @@
 #include <QGraphicsItem>
 #include <QPainter>
 #include <QLabel>
-#include "../internals/pointlatlng.h"
 #include <QObject>
 
-namespace mapcontrol
+#include "../internals/pointlatlng.h"
+
+
+namespace mapcontrol {
+
+class TrailItem:public QObject,public QGraphicsItem
 {
+    Q_OBJECT
+    Q_INTERFACES(QGraphicsItem)
 
-    class TrailItem:public QObject,public QGraphicsItem
-    {
-        Q_OBJECT
-        Q_INTERFACES(QGraphicsItem)
-    public:
-                enum { Type = UserType + 3 };
-        TrailItem(internals::PointLatLng const& coord,int const& altitude, QBrush color, QGraphicsItem* parent);
-        void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
-                    QWidget *widget);
-        QRectF boundingRect() const;
-        int type() const;
-        internals::PointLatLng coord;
-    private:
-        QBrush m_brush;
+public:
+    enum { Type = UserType + 3 };
 
+    TrailItem(internals::PointLatLng const& coord,int const& altitude, QBrush color, QGraphicsItem* parent);
 
-    public slots:
+    void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
+               QWidget *widget);
+    QRectF boundingRect() const;
+    int type() const;
+    internals::PointLatLng coord;
 
-    signals:
+private:
+    QBrush m_brush;
 
-    };
-}
+public slots:
+
+signals:
+
+};
+
+} // end of namespace mapcontrol
+
 #endif // TRAILITEM_H
 
 

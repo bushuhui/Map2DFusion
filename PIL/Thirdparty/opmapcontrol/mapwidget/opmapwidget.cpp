@@ -26,32 +26,38 @@
 * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 */
 
-#include "opmapwidget.h"
 #include <QtGui>
 #include <QMetaObject>
+
+#include "opmapwidget.h"
 #include "waypointitem.h"
 
 namespace mapcontrol {
 
-OPMapWidget::OPMapWidget(QWidget *parent, Configuration *config) : QGraphicsView(parent),
+OPMapWidget::OPMapWidget(QWidget *parent, Configuration *config) :
+    QGraphicsView(parent),
     configuration(config),
     UAV(0),
     GPS(0),
     Home(0),
     GCS(0),
+    DMI(0),
+    GTI(0),
     followmouse(true),
     compass(0),
     showuav(false),
     showhome(false),
     showgcs(false),
+    showGuidedTarget(false),
+    showDMI(false),
     diagTimer(0),
     showDiag(false),
     diagGraphItem(0)
 {
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 
-    core=new internals::Core;
-    map=new MapGraphicItem(core, config);
+    core = new internals::Core;
+    map = new MapGraphicItem(core, config);
     mscene.addItem(map);
     this->setScene(&mscene);
     this->adjustSize();
@@ -74,24 +80,20 @@ OPMapWidget::OPMapWidget(QWidget *parent, Configuration *config) : QGraphicsView
 
 void OPMapWidget::SetShowDiagnostics(bool const& value)
 {
-    showDiag=value;
-    if(!showDiag)
-    {
-        if(diagGraphItem!=0)
-        {
+    showDiag = value;
+    if(!showDiag) {
+        if(diagGraphItem != 0) {
             delete diagGraphItem;
             diagGraphItem=0;
         }
-        if(diagTimer!=0)
-        {
+
+        if(diagTimer != 0) {
             delete diagTimer;
             diagTimer=0;
         }
-    }
-    else
-    {
-        diagTimer=new QTimer();
-        connect(diagTimer,SIGNAL(timeout()),this,SLOT(diagRefresh()));
+    } else {
+        diagTimer = new QTimer();
+        connect(diagTimer, SIGNAL(timeout()), this, SLOT(diagRefresh()));
         diagTimer->start(500);
     }
 }
@@ -139,16 +141,16 @@ void OPMapWidget::DeleteUAV(int id)
     // remove all associated WP lines
     QGraphicsItemGroup* wpLine = waypointLines.value(id, NULL);
     waypointLines.remove(id);
-    if (wpLine) {
+    if ( wpLine ) {
         delete wpLine;
         wpLine = NULL;
     }
 }
 
 /**
-     * @return The reference to the UAVItem or NULL if no item exists yet
-     * @see AddUAV() for adding a not yet existing UAV to the map
-     */
+ * @return The reference to the UAVItem or NULL if no item exists yet
+ * @see AddUAV() for adding a not yet existing UAV to the map
+ */
 UAVItem* OPMapWidget::GetUAV(int id)
 {
     return UAVS.value(id, 0);
@@ -172,8 +174,10 @@ void OPMapWidget::SetShowUAV(const bool &value)
 
         // FIXME XXX The map widget is here actually handling
         // safety and mission logic - might be worth some refactoring
-        connect(this,SIGNAL(UAVLeftSafetyBouble(internals::PointLatLng)),UAV,SIGNAL(UAVLeftSafetyBouble(internals::PointLatLng)));
-        connect(this,SIGNAL(UAVReachedWayPoint(int,WayPointItem*)),UAV,SIGNAL(UAVReachedWayPoint(int,WayPointItem*)));
+        connect(this, SIGNAL(UAVLeftSafetyBouble(internals::PointLatLng)),
+                UAV,  SIGNAL(UAVLeftSafetyBouble(internals::PointLatLng)));
+        connect(this, SIGNAL(UAVReachedWayPoint(int,WayPointItem*)),
+                UAV,  SIGNAL(UAVReachedWayPoint(int,WayPointItem*)));
     } else if(!value) {
         if(UAV!=0) {
             UAV->DeleteTrail();
@@ -198,33 +202,76 @@ void OPMapWidget::SetShowUAV(const bool &value)
 
 void OPMapWidget::SetShowHome(const bool &value)
 {
-    if(value && Home==0)  {
-        Home=new HomeItem(map, this);
-        Home->setParentItem(map);
+    if( value ) {
+        if( Home == 0 ) {
+            Home = new HomeItem(map, this);
+            Home->setParentItem(map);
+        }
+
         showhome = value;
     } else if(!value) {
-        if(Home!=0) {
+        if(Home != 0) {
             delete Home;
-            Home=0;
+            Home = 0;
         }
+
         showhome = value;
     }
 }
 
 void OPMapWidget::SetShowGCS(const bool &value)
 {
-    if(value && GCS==0)  {
-        GCS=new GCSItem(map, this);
-        GCS->setParentItem(map);
+    if( value ) {
+        if( GCS == 0 ) {
+            GCS=new GCSItem(map, this);
+            GCS->setParentItem(map);
+        }
+
         showgcs = value;
-    } else if(!value) {
-        if(GCS!=0) {
+    } else if( !value ) {
+        if( GCS!=0 ) {
             delete GCS;
             GCS=0;
         }
+
         showgcs = value;
     }
 }
+
+void OPMapWidget::SetShowGuidedTarget(const bool &value)
+{
+    if( value )  {
+        if( GTI == 0 ) {
+            GTI = new GuidedTargetItem(map, this);
+            GTI->setParentItem(map);
+        }
+
+        showGuidedTarget = value;
+    } else if( !value ) {
+        if(GTI != 0) {
+            delete GTI;
+            GTI=0;
+        }
+
+        showGuidedTarget = value;
+    }
+}
+
+void OPMapWidget::SetShowDistanceMeasure(const bool &value)
+{
+    if(value && DMI == 0)  {
+        DMI = new DistanceMeasureItem(map, this);
+        DMI->setParentItem(map);
+        showDMI = value;
+    } else if( !value ) {
+        if(DMI != 0) {
+            delete DMI;
+            DMI = 0;
+        }
+        showDMI = value;
+    }
+}
+
 
 void OPMapWidget::resizeEvent(QResizeEvent *event)
 {
@@ -233,8 +280,10 @@ void OPMapWidget::resizeEvent(QResizeEvent *event)
 
     QGraphicsView::resizeEvent(event);
 
+    /*
     if(compass)
         compass->setScale(0.1+0.05*(qreal)(event->size().width())/1000*(qreal)(event->size().height())/600);
+    */
 }
 
 QSize OPMapWidget::sizeHint() const
@@ -260,6 +309,8 @@ OPMapWidget::~OPMapWidget()
 
     if( Home != NULL ) delete Home;
     if( GCS != NULL )  delete GCS;
+    if( DMI != NULL )  delete DMI;
+    if( GTI != NULL)   delete GTI;
 
     delete map;
     delete core;
@@ -424,10 +475,9 @@ void OPMapWidget::WPDelete(WayPointItem *item)
 
 void OPMapWidget::WPDeleteAll()
 {
-    foreach(QGraphicsItem* i,map->childItems()) {
-        WayPointItem* w=qgraphicsitem_cast<WayPointItem*>(i);
-        if(w)
-            delete w;
+    foreach(QGraphicsItem* i, map->childItems()) {
+        WayPointItem *w = qgraphicsitem_cast<WayPointItem*>(i);
+        if(w) delete w;
     }
 }
 
@@ -436,9 +486,8 @@ QList<WayPointItem*> OPMapWidget::WPSelected()
     QList<WayPointItem*> list;
 
     foreach(QGraphicsItem* i, mscene.selectedItems()) {
-        WayPointItem* w=qgraphicsitem_cast<WayPointItem*>(i);
-        if(w)
-            list.append(w);
+        WayPointItem *w = qgraphicsitem_cast<WayPointItem*>(i);
+        if(w) list.append(w);
     }
 
     return list;
@@ -450,7 +499,7 @@ QMap<int, WayPointItem*> OPMapWidget::WPAll()
 
     foreach(QGraphicsItem* i, mscene.items()) {
         WayPointItem* w=qgraphicsitem_cast<WayPointItem*>(i);
-        if ( w ) wpMap.insert(w->Number(), w);
+        if(w) wpMap.insert(w->Number(), w);
     }
 
     return wpMap;
@@ -469,6 +518,94 @@ void OPMapWidget::ConnectWP(WayPointItem *item)
     connect(this,SIGNAL(WPNumberChanged(int,int,WayPointItem*)),item,SLOT(WPRenumbered(int,int,WayPointItem*)));
     connect(this,SIGNAL(WPDeleted(int)),item,SLOT(WPDeleted(int)));
 }
+
+
+
+void OPMapWidget::addWaypointLine(WayPointItem *wp1, WayPointItem *wp2, QColor color)
+{
+    WaypointLinesType::iterator it;
+    WaypointLineItem *wlFound = NULL;
+
+    for(it=m_waypointLines.begin(); it!=m_waypointLines.end(); it++) {
+        WaypointLineItem *wl = *it;
+
+        if( wl->hasWaypoint(wp1->Number()) && wl->hasWaypoint(wp2->Number()) ) {
+            wlFound = wl;
+            break;
+        }
+    }
+
+    if( wlFound == NULL ) {
+        WaypointLineItem *wl = new WaypointLineItem(wp1, wp2, color, map);
+        m_waypointLines.push_back(wl);
+    }
+}
+
+void OPMapWidget::delWaypointLine(WayPointItem *wp1, WayPointItem *wp2)
+{
+    WaypointLineItem *wlFound = NULL;
+    WaypointLinesType::iterator it;
+
+    for(it=m_waypointLines.begin(); it!=m_waypointLines.end(); it++) {
+        WaypointLineItem *wl = *it;
+
+        if( wl->hasWaypoint(wp1->Number()) && wl->hasWaypoint(wp2->Number()) ) {
+            wlFound = wl;
+            break;
+        }
+    }
+
+    if( wlFound != NULL ) {
+        m_waypointLines.removeOne(wlFound);
+        delete wlFound;
+    }
+}
+
+void OPMapWidget::delWaypointLines(WayPointItem *wp)
+{
+    WaypointLinesType::iterator it;
+    WaypointLinesType delList;
+    QList<WayPointItem*> wpList;
+
+    for(it=m_waypointLines.begin(); it!=m_waypointLines.end(); it++) {
+        WaypointLineItem *wl = *it;
+
+        if( wl->hasWaypoint(wp->Number()) ) {
+            delList.push_back(wl);
+
+            if( wl->getWP1() != wp ) wpList.push_back(wl->getWP1());
+            if( wl->getWP2() != wp ) wpList.push_back(wl->getWP2());
+        }
+    }
+
+    for(it=delList.begin(); it!=delList.end(); it++) {
+        WaypointLineItem *wl = *it;
+
+        m_waypointLines.removeOne(wl);
+        delete wl;
+    }
+
+    // add new waypoint line connect broken two waypoints
+    if( wpList.size() == 2 ) {
+        WayPointItem *wp1 = wpList.at(0);
+        WayPointItem *wp2 = wpList.at(1);
+        addWaypointLine(wp1, wp2);
+    }
+}
+
+void OPMapWidget::delAllWaypointLines(void)
+{
+    WaypointLinesType::iterator it;
+
+    for(it=m_waypointLines.begin(); it!=m_waypointLines.end(); it++) {
+        WaypointLineItem *wl = *it;
+        delete wl;
+    }
+
+    m_waypointLines.clear();
+}
+
+
 
 void OPMapWidget::diagRefresh()
 {
@@ -498,12 +635,12 @@ void OPMapWidget::SetShowCompass(const bool &value)
         compass=new QGraphicsSvgItem(QString::fromUtf8(":/markers/images/compas.svg"));
         compass->setScale(0.1+0.05*(qreal)(this->size().width())/1000*(qreal)(this->size().height())/600);
         //    compass->setTransformOriginPoint(compass->boundingRect().width(),compass->boundingRect().height());
-        compass->setFlag(QGraphicsItem::ItemIsMovable, true);
+        compass->setFlag(QGraphicsItem::ItemIsMovable, false);
         mscene.addItem(compass);
         compass->setTransformOriginPoint(compass->boundingRect().width()/2, compass->boundingRect().height()/2);
         compass->setPos(65-compass->boundingRect().width()/2, 65-compass->boundingRect().height()/2);
         compass->setZValue(3);
-        compass->setOpacity(0.7);
+        compass->setOpacity(0.6);
     }
 
     if(!value && compass) {

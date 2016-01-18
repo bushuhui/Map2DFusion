@@ -40,11 +40,21 @@ bool operator==(PointLatLng const& lhs,PointLatLng const& rhs)
 {
    return ((lhs.Lng() == rhs.Lng()) && (lhs.Lat() == rhs.Lat()));
 }
-
 bool operator!=(PointLatLng const& left, PointLatLng const& right)
 {
    return !(left == right);
 }
+
+bool operator<(PointLatLng const& lhs,PointLatLng const& rhs)
+{
+   return lhs.Lat()==rhs.Lat()?(lhs.Lng()<rhs.Lng()):(lhs.Lat()<rhs.Lat());
+}
+
+bool operator>(PointLatLng const& lhs,PointLatLng const& rhs)
+{
+   return lhs.Lat()==rhs.Lat()?(lhs.Lng()>rhs.Lng()):(lhs.Lat()>rhs.Lat());
+}
+
 
 PointLatLng operator+(PointLatLng pt, SizeLatLng sz)
 {

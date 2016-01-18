@@ -27,60 +27,64 @@
 
 #ifndef UAVMAPFOLLOWTYPE_H
 #define UAVMAPFOLLOWTYPE_H
+
 #include <QObject>
 #include <QMetaObject>
 #include <QMetaEnum>
 #include <QStringList>
+
 namespace mapcontrol {
-    class UAVMapFollowType:public QObject
+
+class UAVMapFollowType:public QObject
+{
+    Q_OBJECT
+    Q_ENUMS(Types)
+public:
+    enum Types
     {
-        Q_OBJECT
-        Q_ENUMS(Types)
-    public:
-        enum Types
-        {
-            /// <summary>
-            /// only centers the map on the UAV
-            /// </summary>
-            CenterMap,
+        /// <summary>
+        /// only centers the map on the UAV
+        /// </summary>
+        CenterMap,
 
-            /// <summary>
-            /// centers and rotates map on the UAV
-            /// </summary>
-            CenterAndRotateMap,
+        /// <summary>
+        /// centers and rotates map on the UAV
+        /// </summary>
+        CenterAndRotateMap,
 
-            /// <summary>
-            /// map is not connected to UAV position or heading
-            /// </summary>
-            None
-        };
-        static QString StrByType(Types const& value)
-        {
-            QMetaObject metaObject = UAVMapFollowType().staticMetaObject;
-            QMetaEnum metaEnum= metaObject.enumerator( metaObject.indexOfEnumerator("Types"));
-            QString s=metaEnum.valueToKey(value);
-            return s;
-        }
-        static Types TypeByStr(QString const& value)
-        {
-            QMetaObject metaObject = UAVMapFollowType().staticMetaObject;
-            QMetaEnum metaEnum= metaObject.enumerator( metaObject.indexOfEnumerator("Types"));
-            Types s=(Types)metaEnum.keyToValue(value.toLatin1());
-            return s;
-        }
-        static QStringList TypesList()
-        {
-            QStringList ret;
-            QMetaObject metaObject = UAVMapFollowType().staticMetaObject;
-            QMetaEnum metaEnum= metaObject.enumerator( metaObject.indexOfEnumerator("Types"));
-            for(int x=0;x<metaEnum.keyCount();++x)
-            {
-                ret.append(metaEnum.key(x));
-            }
-            return ret;
-        }
-
+        /// <summary>
+        /// map is not connected to UAV position or heading
+        /// </summary>
+        None
     };
+    static QString StrByType(Types const& value)
+    {
+        QMetaObject metaObject = UAVMapFollowType().staticMetaObject;
+        QMetaEnum metaEnum= metaObject.enumerator( metaObject.indexOfEnumerator("Types"));
+        QString s=metaEnum.valueToKey(value);
+        return s;
+    }
+    static Types TypeByStr(QString const& value)
+    {
+        QMetaObject metaObject = UAVMapFollowType().staticMetaObject;
+        QMetaEnum metaEnum= metaObject.enumerator( metaObject.indexOfEnumerator("Types"));
+        Types s=(Types)metaEnum.keyToValue(value.toLatin1());
+        return s;
+    }
+    static QStringList TypesList()
+    {
+        QStringList ret;
+        QMetaObject metaObject = UAVMapFollowType().staticMetaObject;
+        QMetaEnum metaEnum= metaObject.enumerator( metaObject.indexOfEnumerator("Types"));
+        for(int x=0;x<metaEnum.keyCount();++x)
+        {
+            ret.append(metaEnum.key(x));
+        }
+        return ret;
+    }
+
+};
+
 }
 
 #endif // UAVMAPFOLLOWTYPE_H

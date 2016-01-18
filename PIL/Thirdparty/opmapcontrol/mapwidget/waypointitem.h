@@ -177,6 +177,8 @@ public:
     double HomeAlt() { return homeAlt; }
     void SetHomeAlt(double const& value);
 
+    WayPointItem *getPreviousWaypoint(void);
+
 
     /**
     * @brief Returns the WayPoint Heading
@@ -191,6 +193,11 @@ public:
     * @param value heading in degrees, 0 = north, 90 = east
     */
     void SetHeading(float const& value);
+
+
+    QString WaypointType(void) { return wpType; }
+    void SetWaypointType(const QString &t) { wpType = t; }
+
 
     int type() const;
     virtual QRectF boundingRect() const;
@@ -227,6 +234,7 @@ protected:
     double height;
     double homeAlt;
     float heading;
+    QString wpType;
     int number;
     bool m_mouseDown;
 

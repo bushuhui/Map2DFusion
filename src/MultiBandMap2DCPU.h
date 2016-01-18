@@ -43,6 +43,7 @@ class MultiBandMap2DCPU:public Map2D,public pi::Thread
         double lengthPixel()const{return _lengthPixel;}
         double eleSizeInv()const{return _eleSizeInv;}
         double lengthPixelInv()const{return _lengthPixelInv;}
+        const pi::Point3d& gpsOrigin()const{return _gpsOrigin;}
         const pi::Point3d& min()const{return _min;}
         const pi::Point3d& max()const{return _max;}
         const int w()const{return _w;}
@@ -65,6 +66,7 @@ class MultiBandMap2DCPU:public Map2D,public pi::Thread
     private:
         //IMPORTANT: everything should never changed after prepared!
         double      _eleSize,_lengthPixel,_eleSizeInv,_lengthPixelInv;
+        pi::Point3d _gpsOrigin;
         pi::Point3d _max,_min;
         int         _w,_h;
         std::vector<SPtr<MultiBandMap2DCPUEle> >  _data;

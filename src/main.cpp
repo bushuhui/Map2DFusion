@@ -6,7 +6,7 @@
 #include <base/Svar/Svar.h>
 #include <base/Svar/VecParament.h>
 #include <base/time/Global_Timer.h>
-#include <gui/gl/Win3D.h>
+#include "MainWindow.h"
 
 #include "Map2D.h"
 
@@ -19,7 +19,7 @@ public:
     {
         if(svar.GetInt("Win3D.Enable",1))
         {
-            win3d=SPtr<pi::gl::Win3D>(new pi::gl::Win3D());
+            mainwindow=SPtr<MainWindow>(new MainWindow(0));
         }
 
     }
@@ -28,7 +28,7 @@ public:
         if(map.get())
             map->save(svar.GetString("Map.File2Save","result.png"));
         map=SPtr<Map2D>();
-        win3d=SPtr<pi::gl::Win3D>();
+        mainwindow=SPtr<MainWindow>();
     }
 
     virtual bool KeyPressHandle(void* arg)
@@ -42,10 +42,10 @@ public:
             {
                 pi::timer.enter("Map2D::feed");
                 map->feed(frame.first,frame.second);
-                if(win3d.get()&&tictac.Tac()>0.033)
+                if(mainwindow.get()&&tictac.Tac()>0.033)
                 {
                     tictac.Tic();
-                    win3d->update();
+                    mainwindow->update();
                 }
                 pi::timer.leave("Map2D::feed");
             }
@@ -70,8 +70,11 @@ public:
         return false;
     }
 
-    int testBufferObject()
+    int TestMap2DItem()
     {
+        cv::Mat img=cv::imread(svar.GetString("TestMap2DItem.Image",""));
+        if(img.empty()||!mainwindow.get()) return -1;
+
 
     }
 
@@ -143,12 +146,12 @@ public:
                      PinHoleParameters(vecP[0],vecP[1],vecP[2],vecP[3],vecP[4],vecP[5]),
                     frames);
 
-        if(win3d.get())
+        if(mainwindow.get())
         {
-            win3d->SetEventHandle(this);
-            win3d->insert(map);
-            win3d->setSceneRadius(1000);
-            win3d->Show();
+            mainwindow->getWin3D()->SetEventHandle(this);
+            mainwindow->getWin3D()->insert(map);
+            mainwindow->getWin3D()->setSceneRadius(1000);
+            mainwindow->call("show");
             tictac.Tic();
         }
         else
@@ -168,10 +171,10 @@ public:
                     if(!obtainFrame(frame)) break;
                     map->feed(frame.first,frame.second);
                 }
-                if(win3d.get()&&tictac.Tac()>0.033)
+                if(mainwindow.get()&&tictac.Tac()>0.033)
                 {
                     tictac.Tic();
-                    win3d->update();
+                    mainwindow->getWin3D()->update();
                 }
                 rate.sleep();
             }
@@ -181,16 +184,16 @@ public:
     virtual void run()
     {
         string act=svar.GetString("Act","Default");
-        if(act=="TestBufferObject") testBufferObject();
+        if(act=="TestMap2DItem") TestMap2DItem();
         else if(act=="TestMap2D"||act=="Default") testMap2D();
         else cout<<"No act "<<act<<"!\n";
     }
 
     string        datapath;
     pi::TicTac    tictac;
-    SPtr<pi::gl::Win3D> win3d;
+    SPtr<MainWindow>  mainwindow;
     SPtr<ifstream>      in;
-    SPtr<Map2D>   map;
+    SPtr<Map2D>       map;
 };
 
 int main(int argc,char** argv)

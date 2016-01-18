@@ -45,7 +45,7 @@ class GCSItem : public QObject, public QGraphicsItem
     Q_INTERFACES(QGraphicsItem)
 
 public:
-    enum { Type = UserType + 5 };
+    enum { Type = UserType + 8 };
     GCSItem(MapGraphicItem* map, OPMapWidget* parent);
 
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,

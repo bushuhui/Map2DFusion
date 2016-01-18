@@ -32,6 +32,35 @@
 
 namespace mapcontrol {
 
+
+int calc_dxdy_fromLatLng(double lat1, double lng1,
+                         double lat2, double lng2,
+                         double &dx, double &dy)
+{
+    #define EARTH_RADIUS        6378137.0               ///< Earth radius (unit: m)
+    #define SQR(x)              ((x)*(x))
+
+    #define DEG2RAD             0.017453292519943      ///< degree to radian
+    #define RAD2DEG             57.295779513082323      ///< radian to degree
+
+
+     double      lng_unit, lat_unit, phi_rad;
+     double      a = EARTH_RADIUS;
+     double      f = 1.0/298.257223563;
+     double      e_2 = 2*f - f*f;
+
+     phi_rad = (lat1+lat2)/2.0 * DEG2RAD;
+     lng_unit = DEG2RAD * a * cos(phi_rad) / sqrt(1 - e_2*SQR(sin(phi_rad)));
+     lat_unit = DEG2RAD * a * (1-e_2) / pow(1-e_2*SQR(sin(phi_rad)), 1.5);
+
+     // calculate dx, dy
+     dx = (lng2 - lng1) * lng_unit;
+     dy = (lat2 - lat1) * lat_unit;
+
+     return 0;
+}
+
+
 WayPointItem::WayPointItem(const internals::PointLatLng &coord,
                            double const& altitude,
                            MapGraphicItem *map) :
@@ -52,6 +81,7 @@ WayPointItem::WayPointItem(const internals::PointLatLng &coord,
     homeAlt(400),
     height(50),
     heading(0),
+    wpType("Waypoint"),
     number(0),
     m_mouseDown(false)
 {
@@ -91,6 +121,7 @@ WayPointItem::WayPointItem(const internals::PointLatLng &coord,
     homeAlt(400),
     height(50),
     heading(0),
+    wpType("Waypoint"),
     number(0)
 {
     picture.load(QString::fromUtf8(":/markers/images/marker.png"));
@@ -201,11 +232,27 @@ void WayPointItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
 void WayPointItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 {
     if( isDragging && moveable ) {
-        coord=map->FromLocalToLatLng(this->pos().x(),this->pos().y());
+        coord = map->FromLocalToLatLng(this->pos().x(),this->pos().y());
+
         QString coord_str = " " + QString::number(coord.Lat(), 'f', 6)
                 + "   " + QString::number(coord.Lng(), 'f', 6);
+
+        WayPointItem *wpP = getPreviousWaypoint();
+        if( wpP != NULL ) {
+            internals::PointLatLng coordP = wpP->Coord();
+            double dx, dy, dis;
+
+            calc_dxdy_fromLatLng(coordP.Lat(), coordP.Lng(), coord.Lat(), coord.Lng(),
+                                 dx, dy);
+            dis = sqrt(dx*dx + dy*dy);
+
+            coord_str =  coord_str + " (dx=" + QString::number(dx, 'f', 2) +
+                                     ", dy=" + QString::number(dy, 'f', 2) +
+                                     ", dis=" + QString::number(dis, 'f', 2) +
+                                     ")";
+        }
+
         text->setText(coord_str);
-        // qDebug() << "WP DRAG:" << coord_str << __FILE__ << __LINE__;
         textBG->setRect(text->boundingRect());
 
         emit WPValuesChanged(this);
@@ -301,6 +348,20 @@ void WayPointItem::SetReached(const bool &value)
         this->update();
     }
 }
+
+
+WayPointItem* WayPointItem::getPreviousWaypoint(void)
+{
+    foreach(QGraphicsItem* i, map->childItems()) {
+        WayPointItem *w = qgraphicsitem_cast<WayPointItem*>(i);
+        if( w ) {
+            if( w->Number() == number-1 ) return w;
+        }
+    }
+
+    return NULL;
+}
+
 
 void WayPointItem::SetShowNumber(const bool &value)
 {

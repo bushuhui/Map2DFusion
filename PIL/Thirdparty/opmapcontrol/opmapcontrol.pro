@@ -54,6 +54,7 @@ HEADERS += \
     ./mapwidget/gpsitem.h \
     ./mapwidget/homeitem.h \
     ./mapwidget/gcsitem.h \
+    ./mapwidget/distanceMeasureItem.h \
     ./mapwidget/mapgraphicitem.h \
     ./mapwidget/mapripform.h \
     ./mapwidget/mapripper.h \
@@ -70,6 +71,7 @@ HEADERS += \
     ./internals/projections/mercatorprojectionyandex.h \
     ./internals/projections/platecarreeprojection.h \
     ./internals/projections/platecarreeprojectionpergo.h \
+    mapwidget/guidedTargetItem.h
 
 
 SOURCES += \
@@ -104,6 +106,7 @@ SOURCES += \
     ./mapwidget/gpsitem.cpp \
     ./mapwidget/homeitem.cpp \
     ./mapwidget/gcsitem.cpp \
+    ./mapwidget/distanceMeasureItem.cpp \
     ./mapwidget/mapgraphicitem.cpp \
     ./mapwidget/mapripform.cpp \
     ./mapwidget/mapripper.cpp \
@@ -118,6 +121,7 @@ SOURCES += \
     ./internals/projections/mercatorprojectionyandex.cpp \
     ./internals/projections/platecarreeprojection.cpp \
     ./internals/projections/platecarreeprojectionpergo.cpp \
+    mapwidget/guidedTargetItem.cpp
 
     
 FORMS       += ./mapwidget/mapripform.ui

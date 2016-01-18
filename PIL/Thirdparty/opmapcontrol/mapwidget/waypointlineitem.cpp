@@ -3,19 +3,19 @@
 namespace mapcontrol {
 
 WaypointLineItem::WaypointLineItem(WayPointItem* wp1, WayPointItem* wp2,
-                                   QColor color, mapcontrol::MapGraphicItem* map) :
-                                   QGraphicsLineItem(map),
-                                   wp1(wp1),
-                                   wp2(wp2),
-                                   map(map)
+                                   QColor color, mapcontrol::MapGraphicItem* _map) :
+            QGraphicsLineItem(_map),
+            wp1(wp1),
+            wp2(wp2),
+            map(_map)
 {
     // Make sure this stick to the map
     //this->setFlag(QGraphicsItem::Item, true);
-    setParentItem(map);
+    setParentItem(_map);
 
     // Set up the pen for this icon with the UAV color
     QPen pen(color);
-    pen.setWidth(2);
+    pen.setWidth(1);
     setPen(pen);
 
     point1 = wp1->Coord();
@@ -24,6 +24,7 @@ WaypointLineItem::WaypointLineItem(WayPointItem* wp1, WayPointItem* wp2,
     // Pixel coordinates of the local points
     core::Point localPoint1 = map->FromLatLngToLocal(wp1->Coord());
     core::Point localPoint2 = map->FromLatLngToLocal(wp2->Coord());
+
     // Draw line
     setLine(localPoint1.X(), localPoint1.Y(), localPoint2.X(), localPoint2.Y());
 
@@ -31,6 +32,7 @@ WaypointLineItem::WaypointLineItem(WayPointItem* wp1, WayPointItem* wp2,
     // Update line from both waypoints
     connect(wp1, SIGNAL(WPValuesChanged(WayPointItem*)), this, SLOT(updateWPValues(WayPointItem*)));
     connect(wp2, SIGNAL(WPValuesChanged(WayPointItem*)), this, SLOT(updateWPValues(WayPointItem*)));
+
     // Delete line if one of the waypoints get deleted
     connect(wp1, SIGNAL(destroyed()), this, SLOT(deleteLater()));
     connect(wp2, SIGNAL(destroyed()), this, SLOT(deleteLater()));
@@ -81,6 +83,12 @@ void WaypointLineItem::updateWPValues()
 int WaypointLineItem::type()const
 {
     return Type;
+}
+
+int WaypointLineItem::hasWaypoint(int wp)
+{
+    if( wp1->Number() == wp || wp2->Number() == wp ) return 1;
+    else return 0;
 }
 
 }

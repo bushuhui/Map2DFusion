@@ -13,7 +13,9 @@ SOURCES += src/main.cpp \
     src/Map2DCPU.cpp \
     src/Map2DRender.cpp \
     src/Map2DGPU.cpp \
-    src/MultiBandMap2DCPU.cpp
+    src/MultiBandMap2DCPU.cpp \
+    src/Map2DItem.cpp \
+    src/MainWindow.cpp
 
 HEADERS += \
     src/Map2D.h \
@@ -21,13 +23,26 @@ HEADERS += \
     src/Map2DRender.h \
     src/Map2DGPU.h \
     src/UtilGPU.cuh \
-    src/MultiBandMap2DCPU.h
+    src/MultiBandMap2DCPU.h \
+    src/Map2DItem.h \
+    src/MainWindow.h
 
 # List CUDA source files on the filetree in QtCreator
 OTHER_FILES += \
     src/UtilGPU.cu
 QMAKE_CXXFLAGS +=  -DHAS_CUDA
 CUDA_SOURCES += src/UtilGPU.cu
+
+
+################################################################################
+# PIL settings
+################################################################################
+TOPDIR=/data/zhaoyong/Linux/Program/Apps/Map2DFusion
+PIL_TOP=$$TOPDIR/PIL
+LIBS_DIR=$$TOPDIR/libs
+INCLUDEPATH += $$PIL_TOP/src $$PIL_TOP/Thirdparty
+LIBS+=-L$$TOPDIR/libs \
+-lpi_base -lpi_gui -llua -lpi_lua -lpi_hardware -lopmapwidget
 ################################################################################
 # QT settings
 ################################################################################
@@ -61,15 +76,6 @@ LIBS += -L$$OPENCV_TOP/lib \
 INCLUDEPATH += $$OPENCV_TOP/include $$OPENCV_TOP/include/opencv ../3rdparty/include/ /usr/local/cuda-7.5/targets/x86_64-linux/include
 
 
-################################################################################
-# PIL settings
-################################################################################
-TOPDIR=/data/zhaoyong/Linux/Program/Apps/Map2DFusion
-PIL_TOP=$$TOPDIR/PIL
-LIBS_DIR=$$TOPDIR/libs
-INCLUDEPATH += $$PIL_TOP/src $$PIL_TOP/Thirdparty
-LIBS+=-L$$TOPDIR/libs \
--lpi_base -lpi_gui -llua -lpi_lua
 
 # #######################################################################
 # CUDA

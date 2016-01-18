@@ -33,8 +33,10 @@
 #include "gpsitem.h"
 #include "homeitem.h"
 #include "gcsitem.h"
+#include "guidedTargetItem.h"
 #include "mapgraphicitem.h"
 #include "waypointlineitem.h"
+#include "distanceMeasureItem.h"
 
 namespace mapcontrol {
 
@@ -47,7 +49,8 @@ MapGraphicItem::MapGraphicItem(internals::Core *core, Configuration *configurati
     zoomReal(0),
     rotation(0),
     zoomDigi(0),
-    isSelected(false)
+    isSelected(false),
+    m_mapOverlayShow(false)
 {
     dragons.load(QString::fromUtf8(":/markers/images/dragons1.jpg"));
     showTileGridLines=false;
@@ -94,26 +97,31 @@ QRectF MapGraphicItem::boundingRect() const
 void MapGraphicItem::Core_OnNeedInvalidation()
 {
     this->update();
+
     foreach(QGraphicsItem* i,this->childItems()) {
         WayPointItem* w=qgraphicsitem_cast<WayPointItem*>(i);
-        if(w)
-            w->RefreshPos();
+        if(w) w->RefreshPos();
+
+        WaypointLineItem *wl = qgraphicsitem_cast<WaypointLineItem*>(i);
+        if(wl) wl->RefreshPos();
 
         UAVItem* ww=qgraphicsitem_cast<UAVItem*>(i);
-        if(ww)
-            ww->RefreshPos();
+        if(ww) ww->RefreshPos();
 
         HomeItem* www=qgraphicsitem_cast<HomeItem*>(i);
-        if(www)
-            www->RefreshPos();
-
-        GCSItem* gcs=qgraphicsitem_cast<GCSItem*>(i);
-        if(gcs)
-            gcs->RefreshPos();
+        if(www) www->RefreshPos();
 
         GPSItem* wwww=qgraphicsitem_cast<GPSItem*>(i);
-        if(wwww)
-            wwww->RefreshPos();
+        if(wwww) wwww->RefreshPos();
+
+        GCSItem* gcs=qgraphicsitem_cast<GCSItem*>(i);
+        if(gcs) gcs->RefreshPos();
+
+        GuidedTargetItem *gt = qgraphicsitem_cast<GuidedTargetItem*>(i);
+        if(gt) gt->RefreshPos();
+
+        DistanceMeasureItem* dmi=qgraphicsitem_cast<DistanceMeasureItem*>(i);
+        if(dmi) dmi->RefreshPos();
 
         emit mapChanged();
     }
@@ -121,20 +129,28 @@ void MapGraphicItem::Core_OnNeedInvalidation()
 
 void MapGraphicItem::ChildPosRefresh()
 {
-    foreach(QGraphicsItem* i,this->childItems())
+    foreach(QGraphicsItem* i, this->childItems())
     {
         WayPointItem* w=qgraphicsitem_cast<WayPointItem*>(i);
-        if(w)
-            w->RefreshPos();
+        if( w ) w->RefreshPos();
+
         UAVItem* ww=qgraphicsitem_cast<UAVItem*>(i);
-        if(ww)
-            ww->RefreshPos();
+        if(ww) ww->RefreshPos();
+
         HomeItem* www=qgraphicsitem_cast<HomeItem*>(i);
-        if(www)
-            www->RefreshPos();
+        if(www) www->RefreshPos();
+
         GPSItem* wwww=qgraphicsitem_cast<GPSItem*>(i);
-        if(wwww)
-            wwww->RefreshPos();
+        if(wwww) wwww->RefreshPos();
+
+        GCSItem* gcs=qgraphicsitem_cast<GCSItem*>(i);
+        if(gcs) gcs->RefreshPos();
+
+        GuidedTargetItem *gt = qgraphicsitem_cast<GuidedTargetItem*>(i);
+        if(gt) gt->RefreshPos();
+
+        DistanceMeasureItem* dmi=qgraphicsitem_cast<DistanceMeasureItem*>(i);
+        if(dmi) dmi->RefreshPos();
 
         emit mapChanged();
     }
@@ -146,9 +162,11 @@ void MapGraphicItem::ConstructLastImage(int const& zoomdiff)
     QSize size=boundingRect().size().toSize();
     size.setWidth(size.width()*2*zoomdiff);
     size.setHeight(size.height()*2*zoomdiff);
-    temp=QImage(size,
+
+    temp = QImage(size,
                 QImage::Format_ARGB32_Premultiplied);
     temp.fill(0);
+
     QPainter imagePainter(&temp);
     imagePainter.translate(-boundingRect().topLeft());
     imagePainter.scale(2*zoomdiff,2*zoomdiff);
@@ -161,8 +179,7 @@ void MapGraphicItem::ConstructLastImage(int const& zoomdiff)
 void MapGraphicItem::paintImage(QPainter *painter)
 {
 
-    if(MapRenderTransform!=1)
-    {
+    if(MapRenderTransform != 1) {
         QTransform transform;
         transform.translate(-((boundingRect().width()*MapRenderTransform)-(boundingRect().width()))/2,-((boundingRect().height()*MapRenderTransform)-(boundingRect().height()))/2);
         transform.scale(MapRenderTransform,MapRenderTransform);
@@ -171,9 +188,7 @@ void MapGraphicItem::paintImage(QPainter *painter)
             DrawMap2D(painter);
         }
         painter->resetTransform();
-    }
-    else
-    {
+    } else {
         DrawMap2D(painter);
     }
     //painter->drawRect(maprect);
@@ -184,8 +199,7 @@ void MapGraphicItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *op
     Q_UNUSED(option);
     Q_UNUSED(widget);
 
-    if(MapRenderTransform!=1)
-    {
+    if(MapRenderTransform != 1 ) {
         QTransform transform;
         transform.translate(-((boundingRect().width()*MapRenderTransform)-(boundingRect().width()))/2,-((boundingRect().height()*MapRenderTransform)-(boundingRect().height()))/2);
         transform.scale(MapRenderTransform,MapRenderTransform);
@@ -198,9 +212,7 @@ void MapGraphicItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *op
             DrawMap2D(painter);
         }
         painter->resetTransform();
-    }
-    else
-    {
+    } else {
         DrawMap2D(painter);
     }
 }
@@ -243,6 +255,7 @@ void MapGraphicItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
             SetSelectedArea(internals::RectLatLng(y1, x1, x2 - x1, y1 - y2));
         }
     }
+
     QGraphicsItem::mouseMoveEvent(event);
 }
 
@@ -301,6 +314,10 @@ void MapGraphicItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
             }
         }
 
+        if(!m_mapOverlayRect.IsEmpty() && event->modifiers() == Qt::ShiftModifier)
+        {
+            SetZoomToFitRect(SelectedArea_oflayer());
+        }
     }
 }
 
@@ -457,11 +474,17 @@ void MapGraphicItem::DrawMap2D(QPainter *painter)
                             painter->setBrush(QBrush(QColor(50,50,100,20)));
                             painter->drawRect(x1,y1,x2-x1,y2-y1);
                         }
+
+                        if( m_mapOverlayShow )
+                        {
+                            drawMapOverlay(painter);
+                        }
                     }
                 }
             }
         }
     }
+
     // painter->drawRect(core->GetrenderOffset().X()-lastimagepoint.X()-3,core->GetrenderOffset().Y()-lastimagepoint.Y()-3,lastimage.width(),lastimage.height());
     //        painter->setPen(Qt::red);
     //        painter->drawLine(-10,-10,10,10);
@@ -473,15 +496,15 @@ void MapGraphicItem::DrawMap2D(QPainter *painter)
 core::Point MapGraphicItem::FromLatLngToLocal(internals::PointLatLng const& point)
 {
     core::Point ret = core->FromLatLngToLocal(point);
+
     if(MapRenderTransform!=1)
     {
         ret.SetX((int) (ret.X() * MapRenderTransform));
         ret.SetY((int) (ret.Y() * MapRenderTransform));
         ret.SetX(ret.X()-((boundingRect().width()*MapRenderTransform)-(boundingRect().width()))/2);
         ret.SetY(ret.Y()-((boundingRect().height()*MapRenderTransform)-(boundingRect().height()))/2);
-
-
     }
+
     return ret;
 }
 
@@ -513,6 +536,61 @@ double MapGraphicItem::ZoomDigi()
 {
     return zoomDigi;
 }
+
+
+bool MapGraphicItem::drawMapOverlay(QPainter *painter)
+{
+    if(!m_mapOverlayImg.isNull() && !m_mapOverlayRect.IsEmpty()) {
+        core::Point p1 = FromLatLngToLocal(SelectedArea_oflayer().LocationTopLeft());
+        core::Point p2 = FromLatLngToLocal(SelectedArea_oflayer().LocationRightBottom());
+        int x1 = p1.X();
+        int y1 = p1.Y();
+        int x2 = p2.X();
+        int y2 = p2.Y();
+
+        //for alpha
+        QPixmap pixmap(QPixmap::fromImage(m_mapOverlayImg));
+        QPixmap temp(pixmap.size());
+        temp.fill(Qt::transparent);
+        QPainter p(&temp);
+        p.setCompositionMode(QPainter::CompositionMode_Source);
+        p.drawPixmap(0, 0, pixmap);
+        p.setCompositionMode(QPainter::CompositionMode_DestinationIn);
+
+#if 0
+//path
+        QPainterPath polygonPath;
+        polygonPath.moveTo(0, 0);
+        polygonPath.lineTo(30.0, y2-y1-100);
+        polygonPath.lineTo(80.0, y2-y1-30);
+        polygonPath.lineTo(x2-x1, 0.0);
+        polygonPath.closeSubpath();
+//clip
+
+        QPolygon qpolygon;
+        qpolygon.setPoint(0, 0, 0);
+        qpolygon.setPoint(1, 0, 100);
+        qpolygon.setPoint(2, 120, 130);
+        qpolygon.setPoint(3, 10, 140);
+        p.setClipping(true);
+        p.setClipRegion( QRegion(qpolygon));
+#endif
+        p.setBackgroundMode(Qt::TransparentMode);
+        //p.fillPath(temp.rect(),QColor(0, 0, 0, alpha_layer));
+        p.fillRect(temp.rect(),QColor(0, 0, 0, m_mapOverlayAlpha));
+        p.end();
+        pixmap = temp;
+        //end of alpha
+
+       // painter->setOpacity(2);
+        painter->drawPixmap(x1, y1, (x2-x1),(y2-y1),pixmap);
+        //painter->drawPixmap(x1, y1, (x2-x1),(y2-y1),QPixmap::fromImage(Layer_Img));//if no use alpha ,use this and Commented out uper one.
+
+        return true;
+    }
+    return false;
+}
+
 
 double MapGraphicItem::ZoomTotal()
 {

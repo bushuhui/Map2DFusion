@@ -37,6 +37,8 @@ struct PointLatLng
     //friend uint qHash(PointLatLng const& point);
     friend bool operator==(PointLatLng const& lhs,PointLatLng const& rhs);
     friend bool operator!=(PointLatLng const& left, PointLatLng const& right);
+    friend bool operator<(PointLatLng const& left, PointLatLng const& right);
+    friend bool operator>(PointLatLng const& left, PointLatLng const& right);
     friend PointLatLng operator+(PointLatLng pt, SizeLatLng sz);
     friend PointLatLng operator-(PointLatLng pt, SizeLatLng sz);
 

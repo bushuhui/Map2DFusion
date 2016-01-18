@@ -45,7 +45,7 @@ class HomeItem:public QObject,public QGraphicsItem
     Q_INTERFACES(QGraphicsItem)
 
 public:
-    enum { Type = UserType + 4 };
+    enum { Type = UserType + 7 };
     HomeItem(MapGraphicItem* map,OPMapWidget* parent);
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
                QWidget *widget);

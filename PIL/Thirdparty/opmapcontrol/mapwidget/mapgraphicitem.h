@@ -129,6 +129,8 @@ public:
         */
     internals::RectLatLng SelectedArea()const{return selectedArea;}
 
+    internals::RectLatLng SelectedArea_oflayer()const{return m_mapOverlayRect;}
+
 public slots:
     void SetSelectedArea(internals::RectLatLng const& value){selectedArea = value;this->update();}
 
@@ -138,6 +140,9 @@ protected:
     void wheelEvent ( QGraphicsSceneWheelEvent * event );
     void mouseReleaseEvent(QGraphicsSceneMouseEvent *event);
     bool IsMouseOverMarker()const{return isMouseOverMarker;}
+
+    bool drawMapOverlay(QPainter *painter);
+
 
     /**
         * @brief Returns current map zoom
@@ -186,6 +191,13 @@ private:
     internals::RectLatLng selectedArea;
     internals::PointLatLng selectionStart;
     internals::PointLatLng selectionEnd;
+
+    // show new generate map patch on the standard map
+    internals::RectLatLng   m_mapOverlayRect;               // range
+    QImage                  m_mapOverlayImg;                // map patch
+    bool                    m_mapOverlayShow;               // show/hide
+    int                     m_mapOverlayAlpha;              // overall alpha value
+
 
     double zoomReal;
     qreal rotation;

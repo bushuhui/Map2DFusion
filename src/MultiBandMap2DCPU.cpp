@@ -9,6 +9,12 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/stitching/stitcher.hpp>
 
+#define HAS_GOOGLEMAP
+#ifdef HAS_GOOGLEMAP
+#include <hardware/Gps/utils_GPS.h>
+#include <base/Svar/Scommand.h>
+#endif
+
 using namespace std;
 
 /**
@@ -152,6 +158,8 @@ bool MultiBandMap2DCPU::MultiBandMap2DCPUEle::updateTexture(const std::vector<SP
         }
     }
 
+    SvarWithType<cv::Mat>::instance()["LastTexMat"]=tmp;
+
     Ischanged=false;
     return true;
 }
@@ -202,6 +210,7 @@ bool MultiBandMap2DCPU::MultiBandMap2DCPUData::prepare(SPtr<MultiBandMap2DCPUPre
             _max.y=_min.y+_eleSize*_h;
             _data.resize(_w*_h);
         }
+        _gpsOrigin=svar.get_var("GPSOrigin",_gpsOrigin);
     }
     return true;
 }
@@ -664,6 +673,7 @@ void MultiBandMap2DCPU::draw()
                     if(ele->Ischanged)
                     {
                         pi::timer.enter("MultiBandMap2DCPU::updateTexture");
+                        bool updated=false;
                         if(_highQualityShow)
                         {
                             vector<SPtr<MultiBandMap2DCPUEle> > neighbors;
@@ -675,11 +685,26 @@ void MultiBandMap2DCPU::draw()
                                         neighbors.push_back(SPtr<MultiBandMap2DCPUEle>());
                                     else neighbors.push_back(dataCopy[yi*wCopy+xi]);
                                 }
-                            ele->updateTexture(neighbors);
+                            updated=ele->updateTexture(neighbors);
                         }
                         else
-                            ele->updateTexture();
+                            updated=ele->updateTexture();
                         pi::timer.leave("MultiBandMap2DCPU::updateTexture");
+
+                        if(updated&&svar.GetInt("Fuse2Google"))
+                        {
+                            pi::timer.enter("MultiBandMap2DCPU::fuseGoogle");
+                            stringstream cmd;
+                            pi::Point3d  worldTl=p->_plane*pi::Point3d(x0,y0,0);
+                            pi::Point3d  worldBr=p->_plane*pi::Point3d(x1,y1,0);
+                            pi::Point3d  gpsTl,gpsBr;
+                            pi::calcLngLatFromDistance(d->gpsOrigin().x,d->gpsOrigin().y,worldTl.x,worldTl.y,gpsTl.x,gpsTl.y);
+                            pi::calcLngLatFromDistance(d->gpsOrigin().x,d->gpsOrigin().y,worldBr.x,worldBr.y,gpsBr.x,gpsBr.y);
+                            cmd<<"Map2DUpdate LastTexMat "<<gpsTl<<" "<<gpsBr;
+                            scommand.Call("MapWidget",cmd.str());
+                            pi::timer.leave("MultiBandMap2DCPU::fuseGoogle");
+
+                        }
                     }
                 }
                 if(ele->texName)

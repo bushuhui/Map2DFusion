@@ -9,11 +9,20 @@ namespace mapcontrol {
 class WaypointLineItem : public QObject, public QGraphicsLineItem
 {
     Q_OBJECT
+
     Q_INTERFACES(QGraphicsItem)
+
 public:
-    enum { Type = UserType + 7 };
-    WaypointLineItem(WayPointItem* wp1, WayPointItem* wp2, QColor color=QColor(Qt::red), MapGraphicItem* parent=0);
+    enum { Type = UserType + 2 };
+
+    WaypointLineItem(WayPointItem* wp1, WayPointItem* wp2, QColor color=QColor(Qt::red), mapcontrol::MapGraphicItem* _map=0);
+
     int type() const;
+
+    int hasWaypoint(int wp);
+
+    WayPointItem* getWP1(void) { return wp1; }
+    WayPointItem* getWP2(void) { return wp2; }
 
 public slots:
     /**
