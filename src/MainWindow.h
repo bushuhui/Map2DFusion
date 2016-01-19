@@ -16,6 +16,8 @@ public:
 
     pi::gl::Win3D* getWin3D(){return win3d;}
 
+    bool    setMapType(const std::string& MapType);
+
     void    call(const std::string& cmd);
 
 signals:

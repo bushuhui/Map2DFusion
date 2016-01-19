@@ -2,6 +2,21 @@
 #include "gui/controls/SvarTable.h"
 #include "Map2DItem.h"
 #include <base/Svar/Scommand.h>
+using namespace std;
+
+void GuiHandle(void *ptr,string cmd,string para)
+{
+    if(cmd=="setMapType")
+    {
+        MainWindow* mainwindow=(MainWindow*)ptr;
+        mainwindow->setMapType(para);
+    }
+    else if(cmd=="show")
+    {
+        MainWindow* mainwindow=(MainWindow*)ptr;
+        mainwindow->call("show");
+    }
+}
 
 MainWindow::MainWindow(QWidget *parent):QMainWindow(parent)
 {
@@ -14,6 +29,8 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent)
     // setup layout
     setupLayout();
     connect(this, SIGNAL(call_signal() ), this, SLOT(call_slot()) );
+    scommand.RegisterCommand("setMapType",GuiHandle,this);
+    scommand.RegisterCommand("show",GuiHandle,this);
 }
 
 int MainWindow::setupLayout(void)
@@ -58,13 +75,18 @@ int MainWindow::setupLayout(void)
     return 0;
 }
 
+bool MainWindow::setMapType(const std::string& MapType)
+{
+    mapwidget->SetMapType(MapType::TypeByStr(QString::fromStdString(MapType)));
+    cout<<"Map type has changed to "<<MapType::StrByType(mapwidget->GetMapType()).toStdString();
+    return true;
+}
+
 void MainWindow::keyPressEvent(QKeyEvent *event)
 {
     int     key;
 
     key  = event->key();
-
-
 }
 
 void MainWindow::mousePressEvent(QMouseEvent *event)

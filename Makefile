@@ -31,6 +31,7 @@ lua:
 
 opmapcontrol:
 	$(MAKE) -C PIL/Thirdparty/opmapcontrol
+	mv PIL/libs/* $(LIBS_PATH)
 
 pi_base:
 	$(MAKE) -C PIL/src/base
