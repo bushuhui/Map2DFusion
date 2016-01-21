@@ -72,10 +72,20 @@ public:
 
     int TestMap2DItem()
     {
-        cv::Mat img=cv::imread(svar.GetString("TestMap2DItem.Image",""));
-        if(img.empty()||!mainwindow.get()) return -1;
+        cv::Mat img=cv::imread(svar.GetString("TestMap2DItem.Image","data/test.png"));
+        if(img.empty()||!mainwindow.get())
+        {
+            cerr<<"No image or mainwindow found.!\n";
+            return -1;
+        }
+//        cv::imshow("img",img);
+        SvarWithType<cv::Mat>::instance()["LastTexMat"]=img;
 
-
+        mainwindow->getWin3D()->SetEventHandle(this);
+        mainwindow->getWin3D()->setSceneRadius(1000);
+        mainwindow->call("show");
+        mainwindow->call("MapWidget"+svar.GetString(" TestMap2DItem.cmd",
+        " Map2DUpdate LastTexMat 34.257287 108.888931 0 34.253234419307354 108.89463874078366 0"));
     }
 
     bool obtainFrame(std::pair<cv::Mat,pi::SE3d>& frame)
@@ -152,6 +162,10 @@ public:
             mainwindow->getWin3D()->insert(map);
             mainwindow->getWin3D()->setSceneRadius(1000);
             mainwindow->call("show");
+
+            if(!svar.exist("GPS.Origin")) svar.i["Fuse2Google"]=0;
+            else
+                svar.ParseLine("SetCurrentPosition $(GPS.Origin)");
             tictac.Tic();
         }
         else
@@ -162,7 +176,7 @@ public:
 
         if(svar.GetInt("AutoFeedFrames",1))
         {
-            pi::Rate rate(100);
+            pi::Rate rate(svar.GetInt("Video.fps",100));
             while(!shouldStop())
             {
                 if(map->queueSize()<2)

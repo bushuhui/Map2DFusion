@@ -35,15 +35,6 @@ CUDA_SOURCES += src/UtilGPU.cu
 
 
 ################################################################################
-# PIL settings
-################################################################################
-TOPDIR=/data/zhaoyong/Linux/Program/Apps/Map2DFusion
-PIL_TOP=$$TOPDIR/PIL
-LIBS_DIR=$$TOPDIR/libs
-INCLUDEPATH += $$PIL_TOP/src $$PIL_TOP/Thirdparty
-LIBS+=-L$$TOPDIR/libs \
--lpi_base -lpi_gui -llua -lpi_lua -lpi_hardware -lopmapwidget
-################################################################################
 # QT settings
 ################################################################################
 INCLUDEPATH+=/usr/share/qt4/mkspecs/linux-g++ \
@@ -54,7 +45,6 @@ INCLUDEPATH+=/usr/share/qt4/mkspecs/linux-g++ \
 /usr/include/qt4
 
 LIBS+=-lQtGui -lQtCore -lQtXml
-
 ################################################################################
 # QGLViewer settings
 ################################################################################
@@ -76,6 +66,16 @@ LIBS += -L$$OPENCV_TOP/lib \
 INCLUDEPATH += $$OPENCV_TOP/include $$OPENCV_TOP/include/opencv ../3rdparty/include/ /usr/local/cuda-7.5/targets/x86_64-linux/include
 
 
+
+################################################################################
+# PIL settings
+################################################################################
+TOPDIR=/data/zhaoyong/Linux/Program/Apps/Map2DFusion
+PIL_TOP=$$TOPDIR/PIL
+LIBS_DIR=$$TOPDIR/libs
+INCLUDEPATH += $$PIL_TOP/src $$PIL_TOP/Thirdparty
+LIBS+=-L$$TOPDIR/libs \
+-lpi_base -lpi_gui -llua -lpi_lua -lpi_hardware -lopmapwidget
 
 # #######################################################################
 # CUDA

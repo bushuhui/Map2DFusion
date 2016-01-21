@@ -32,10 +32,7 @@ class MultiBandMap2DCPU:public Map2D,public pi::Thread
     {
         MultiBandMap2DCPUData():_w(0),_h(0){}
         MultiBandMap2DCPUData(double eleSize_,double lengthPixel_,pi::Point3d max_,pi::Point3d min_,
-                     int w_,int h_,const std::vector<SPtr<MultiBandMap2DCPUEle> >& d_)
-            :_eleSize(eleSize_),_eleSizeInv(1./eleSize_),
-              _lengthPixel(lengthPixel_),_lengthPixelInv(1./lengthPixel_),
-              _min(min_),_max(max_),_w(w_),_h(h_),_data(d_){}
+                     int w_,int h_,const std::vector<SPtr<MultiBandMap2DCPUEle> >& d_);
 
         bool   prepare(SPtr<MultiBandMap2DCPUPrepare> prepared);// only done Once!
 

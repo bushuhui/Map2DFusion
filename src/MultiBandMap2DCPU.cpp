@@ -159,9 +159,19 @@ bool MultiBandMap2DCPU::MultiBandMap2DCPUEle::updateTexture(const std::vector<SP
     }
 
     SvarWithType<cv::Mat>::instance()["LastTexMat"]=tmp;
+    SvarWithType<cv::Mat>::instance()["LastTexMatWeight"]=weights[0].clone();
 
     Ischanged=false;
     return true;
+}
+
+MultiBandMap2DCPU::MultiBandMap2DCPUData::MultiBandMap2DCPUData(double eleSize_,double lengthPixel_,pi::Point3d max_,pi::Point3d min_,
+             int w_,int h_,const std::vector<SPtr<MultiBandMap2DCPUEle> >& d_)
+    :_eleSize(eleSize_),_eleSizeInv(1./eleSize_),
+      _lengthPixel(lengthPixel_),_lengthPixelInv(1./lengthPixel_),
+      _min(min_),_max(max_),_w(w_),_h(h_),_data(d_)
+{
+    _gpsOrigin=svar.get_var("GPS.Origin",_gpsOrigin);
 }
 
 bool MultiBandMap2DCPU::MultiBandMap2DCPUData::prepare(SPtr<MultiBandMap2DCPUPrepare> prepared)
@@ -210,8 +220,8 @@ bool MultiBandMap2DCPU::MultiBandMap2DCPUData::prepare(SPtr<MultiBandMap2DCPUPre
             _max.y=_min.y+_eleSize*_h;
             _data.resize(_w*_h);
         }
-        _gpsOrigin=svar.get_var("GPSOrigin",_gpsOrigin);
     }
+    _gpsOrigin=svar.get_var("GPS.Origin",_gpsOrigin);
     return true;
 }
 
@@ -673,7 +683,7 @@ void MultiBandMap2DCPU::draw()
                     if(ele->Ischanged)
                     {
                         pi::timer.enter("MultiBandMap2DCPU::updateTexture");
-                        bool updated=false;
+                        bool updated=false,inborder=false;
                         if(_highQualityShow)
                         {
                             vector<SPtr<MultiBandMap2DCPUEle> > neighbors;
@@ -682,7 +692,10 @@ void MultiBandMap2DCPU::draw()
                                 for(int xi=x-1;xi<=x+1;xi++)
                                 {
                                     if(yi<0||yi>=hCopy||xi<0||xi>=wCopy)
+                                    {
                                         neighbors.push_back(SPtr<MultiBandMap2DCPUEle>());
+                                        inborder=true;
+                                    }
                                     else neighbors.push_back(dataCopy[yi*wCopy+xi]);
                                 }
                             updated=ele->updateTexture(neighbors);
@@ -691,7 +704,7 @@ void MultiBandMap2DCPU::draw()
                             updated=ele->updateTexture();
                         pi::timer.leave("MultiBandMap2DCPU::updateTexture");
 
-                        if(updated&&svar.GetInt("Fuse2Google"))
+                        if(updated&&!inborder&&svar.GetInt("Fuse2Google"))
                         {
                             pi::timer.enter("MultiBandMap2DCPU::fuseGoogle");
                             stringstream cmd;
@@ -700,7 +713,10 @@ void MultiBandMap2DCPU::draw()
                             pi::Point3d  gpsTl,gpsBr;
                             pi::calcLngLatFromDistance(d->gpsOrigin().x,d->gpsOrigin().y,worldTl.x,worldTl.y,gpsTl.x,gpsTl.y);
                             pi::calcLngLatFromDistance(d->gpsOrigin().x,d->gpsOrigin().y,worldBr.x,worldBr.y,gpsBr.x,gpsBr.y);
-                            cmd<<"Map2DUpdate LastTexMat "<<gpsTl<<" "<<gpsBr;
+                            cout<<"world:"<<worldBr<<"origin:"<<d->gpsOrigin()<<endl;
+                            cmd<<"Map2DUpdate LastTexMat "<< setiosflags(ios::fixed)
+                              << setprecision(9)<<gpsTl<<" "<<gpsBr;
+//                            cout<<cmd.str()<<endl;
                             scommand.Call("MapWidget",cmd.str());
                             pi::timer.leave("MultiBandMap2DCPU::fuseGoogle");
 
