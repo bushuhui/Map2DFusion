@@ -3,6 +3,7 @@
 #include <GL/gl.h>
 #include <base/Svar/Svar.h>
 #include <base/time/Global_Timer.h>
+#include <base/utils/utils_str.h>
 #include <gui/gl/SignalHandle.h>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -149,7 +150,7 @@ public:
         int x_tl = tl_new.x - dst_roi_.x;
         int x_br = br_new.x - dst_roi_.x;
 
-        if(svar.GetInt("Map2DRender.ShowPyrLaplace",1))
+        if(svar.GetInt("Map2DRender.ShowPyrLaplace",0))
         {
             vector<cv::Mat> pyr_laplaceClone(src_pyr_laplace.size());
             for(int i=0;i<src_pyr_laplace.size();i++)
@@ -158,20 +159,25 @@ public:
                 mulWeightMap(weight_pyr_gauss[i],pyr_laplaceClone[i]);
 //                normalizeUsingWeightMap(weight_pyr_gauss[i],pyr_laplaceClone[i]);
                 {
-                    cv::Mat result;pyr_laplaceClone[i].convertTo(result,CV_8U);
+                    cv::Mat result;pyr_laplaceClone[i].convertTo(result,CV_8U,src_pyr_laplace.size()==(i+1)?1:10);
+                    cv::imwrite("lap"+pi::itos(i)+".png",result);
                     cv::imshow("pyrImage",result);
                     cv::imshow("pyrWeight",weight_pyr_gauss[i]);
                     cv::waitKey(0);
                 }
             }
-            restoreImageFromLaplacePyr(pyr_laplaceClone);
-            cv::Mat result=pyr_laplaceClone[0];
-            result.convertTo(result,CV_8U);
-            result.setTo(cv::Scalar::all(0),weight_pyr_gauss[0]==0);
-            cv::imshow("imgWithBorder",img_with_border);
-            cv::imshow("weight",weight_pyr_gauss[0]);
-            cv::imshow("restoreImage",result);
-            cv::waitKey(0);
+
+            if(svar.GetInt("Map2DRender.ShowRestore",0))
+            {
+                restoreImageFromLaplacePyr(pyr_laplaceClone);
+                cv::Mat result=pyr_laplaceClone[0];
+                result.convertTo(result,CV_8U);
+                result.setTo(cv::Scalar::all(0),weight_pyr_gauss[0]==0);
+                cv::imshow("imgWithBorder",img_with_border);
+                cv::imshow("weight",weight_pyr_gauss[0]);
+                cv::imshow("restoreImage",result);
+                cv::waitKey(0);
+            }
         }
         // Add weighted layer of the source image to the final Laplacian pyramid layer
         if(weight_type_ == CV_32F)
@@ -189,7 +195,7 @@ public:
                     for (int x = x_tl; x < x_br; ++x)
                     {
                         int x_ = x - x_tl;
-#if 1
+#if 0
                         if(weight_row[x_]>=dst_weight_row[x])
                         {
                             dst_weight_row[x]=weight_row[x_];

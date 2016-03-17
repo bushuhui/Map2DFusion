@@ -18,6 +18,9 @@ public:
     internals::PointLatLng lt,rb;
 };
 
+/**
+ * @brief The Map2DItem class does not contains any mutex and all thing should be done in GUI thread.
+ */
 class Map2DItem: public QObject, public QGraphicsItem
 {
 //    Q_OBJECT
@@ -33,9 +36,11 @@ public:
     virtual QRectF boundingRect() const;
 
     bool update(const QPixmap& img,const pi::Point3d& _lt,const pi::Point3d& _rb);
+    void insertGPSPoint(const internals::PointLatLng& pos){gpsPoints.push_back(pos);}
 
     QRectF rectGPS;
     std::map<internals::PointLatLng,Map2DElement> elements;
+    std::vector<internals::PointLatLng>           gpsPoints;
 
     MapGraphicItem* map;
     OPMapWidget* mapwidget;

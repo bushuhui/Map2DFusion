@@ -95,7 +95,7 @@ public:
         stringstream ifs(line);
         string imgfile;
         ifs>>imgfile;
-        imgfile=datapath+"/"+imgfile+".png";
+        imgfile=datapath+"/rgb/"+imgfile+".jpg";
         pi::timer.enter("obtainFrame");
         frame.first=cv::imread(imgfile);
         pi::timer.leave("obtainFrame");

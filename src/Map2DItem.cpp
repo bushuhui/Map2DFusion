@@ -60,6 +60,13 @@ void Map2DItemHandle(void* ptr,std::string cmd,std::string para)
         }
         pi::timer.leave("Map2DUpdate");
     }
+    else if(cmd=="InsertGPSPoint")
+    {
+        Map2DItem* item=(Map2DItem*)ptr;
+        double lng,lat;
+        sst>>lng>>lat;
+        item->insertGPSPoint(internals::PointLatLng(lat,lng));
+    }
     else if(cmd=="SetPositionFromMap2D")
     {
 
@@ -85,16 +92,28 @@ void Map2DItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
     pi::timer.enter("Map2DItem::paint");
     Q_UNUSED(option);
     Q_UNUSED(widget);
-//    cout<<"paint Handled.\n";
     for(std::map<internals::PointLatLng,Map2DElement>::iterator it=elements.begin();it!=elements.end();it++)
     {
         Map2DElement& ele=it->second;
         core::Point lt=map->FromLatLngToLocal(ele.lt);
         core::Point rb=map->FromLatLngToLocal(ele.rb);
         painter->drawPixmap(QRect(lt.X(),lt.Y(),rb.X()-lt.X(),rb.Y()-lt.Y()),ele.image);
-//        painter->drawPixmap(QRect(0,0,100,100),ele.image);
-//        cout<<"painting elements:"<<ele.image.width()<<" "<<ele.image.height()<<".\n";
     }
+
+    if(gpsPoints.size()>=2)
+    {
+        //convert to lines
+        std::vector<QPointF> pts;
+        pts.reserve(gpsPoints.size());
+        for(int i=0;i<gpsPoints.size();i++)
+        {
+            core::Point pt=map->FromLatLngToLocal(gpsPoints[i]);
+            pts.push_back(QPointF(pt.X(),pt.Y()));
+        }
+        for(int i=1;i<pts.size();i++)
+            painter->drawLine(pts[i-1],pts[i]);
+    }
+
     pi::timer.leave("Map2DItem::paint");
 }
 

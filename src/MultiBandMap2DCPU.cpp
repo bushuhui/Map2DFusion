@@ -197,15 +197,22 @@ bool MultiBandMap2DCPU::MultiBandMap2DCPUData::prepare(SPtr<MultiBandMap2DCPUPre
     }
     //estimate w,h and bonding box
     {
-        double minh;
-        if(_min.z>0) minh=_min.z;
-        else minh=-_max.z;
+        double maxh;
+        if(_max.z>0) maxh=_max.z;
+        else maxh=-_min.z;
         pi::Point3d line=prepared->UnProject(pi::Point2d(prepared->_camera.w,prepared->_camera.h))
                 -prepared->UnProject(pi::Point2d(0,0));
-        double radius=0.5*minh*sqrt((line.x*line.x+line.y*line.y));
-        _lengthPixel=2*radius/sqrt(prepared->_camera.w*prepared->_camera.w
-                                   +prepared->_camera.h*prepared->_camera.h);
-        _lengthPixel/=svar.GetDouble("Map2D.Scale",1);
+        double radius=0.5*maxh*sqrt((line.x*line.x+line.y*line.y));
+        _lengthPixel=svar.GetDouble("Map2D.Resolution",0);
+        if(!_lengthPixel)
+        {
+            cout<<"Auto resolution from max height "<<maxh<<"m.\n";
+            _lengthPixel=2*radius/sqrt(prepared->_camera.w*prepared->_camera.w
+                                       +prepared->_camera.h*prepared->_camera.h);
+
+            _lengthPixel/=svar.GetDouble("Map2D.Scale",1);
+        }
+        cout<<"Map2D.Resolution="<<_lengthPixel<<endl;
         _lengthPixelInv=1./_lengthPixel;
         _min=_min-pi::Point3d(radius,radius,0);
         _max=_max+pi::Point3d(radius,radius,0);
@@ -426,6 +433,13 @@ bool MultiBandMap2DCPU::renderFrame(const std::pair<cv::Mat,pi::SE3d>& frame)
     {
         cv::imshow("image_warped",image_warped);
         cv::imshow("weight_warped",weight_warped);
+        if(svar.GetInt("SaveImageWarped"))
+        {
+            cout<<"Saving warped image.\n";
+            cv::imwrite("image_warped.png",image_warped);
+            cv::imwrite("weight_warped.png",weight_warped);
+        }
+        cv::waitKey(0);
     }
 
     // 4. blender dst to eles
@@ -798,7 +812,7 @@ bool MultiBandMap2DCPU::save(const std::string& filename)
 
     cv::Mat result=pyr_laplace[0];
     if(result.type()==CV_16SC3) result.convertTo(result,CV_8UC3);
-    result.setTo(cv::Scalar::all(0),pyr_weights[0]==0);
+    result.setTo(cv::Scalar::all(svar.GetInt("Result.BackGroundColor")),pyr_weights[0]==0);
     cv::imwrite(filename,result);
     return true;
 }

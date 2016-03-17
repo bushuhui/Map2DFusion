@@ -33,6 +33,11 @@ void GuiHandle(void *ptr,string cmd,string para)
         sst>>level;
         mapwidget->SetZoom(level);
     }
+    else if(cmd=="MainWindow")
+    {
+        MainWindow* mainwindow=(MainWindow*)ptr;
+        mainwindow->call(para);
+    }
 }
 
 MainWindow::MainWindow(QWidget *parent):QMainWindow(parent),win3d(NULL),mapwidget(NULL)
@@ -48,6 +53,7 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent),win3d(NULL),mapwidge
     connect(this, SIGNAL(call_signal() ), this, SLOT(call_slot()) );
     scommand.RegisterCommand("setMapType",GuiHandle,this);
     scommand.RegisterCommand("show",GuiHandle,this);
+    scommand.RegisterCommand("MainWindow",GuiHandle,this);
 }
 
 int MainWindow::setupLayout(void)
